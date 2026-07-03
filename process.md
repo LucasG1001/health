@@ -19,14 +19,16 @@
 | 6 | Sessão de treino (máquina de estados + execução) | ✅ concluída (SessionPage, StartSessionModal) |
 | 7 | Finish + gamificação + histórico + configurações | ✅ concluída (SessionSummaryPage, HistoryPage, SessionDetailPage, SettingsPage) |
 | 8 | Docker, docs | ✅ concluída (Dockerfile, docker-compose.yml, .env.example, README.md, CLAUDE.md) |
-| 9 | Verificação end-to-end no navegador | ⬜ PENDENTE — único passo restante |
+| 9 | Verificação end-to-end no navegador | ✅ concluída (Playwright mobile viewport, 2026-07-03) |
 
-## Verificação (backend + frontend compilam; falta rodar de ponta a ponta)
+## Verificação (concluída)
 
-- Backend: `npm run build` ✅, `npm test` ✅ (23 testes). Frontend: `npm run build` ✅, `npm test` ✅ (9), `npm run lint` ✅ (0 erros).
-- **Falta**: subir Postgres local (banco `health`), `cd backend && npm run dev`, `cd frontend && npm run dev`, e testar no viewport mobile:
-  perfil → medição → gráficos → meta → foto+comparador → buscar/importar exercício do catálogo → divisão → **sessão completa com timer/aviso 10s/liberação automática → refresh no meio do descanso (countdown deve retomar) → finalizar → resumo com PRs/streak**.
-- Depois da verificação: testar `docker compose up --build` se possível.
+- Backend: build ✅, 23 testes ✅. Frontend: build ✅, 9 testes ✅, lint ✅.
+- API de ponta a ponta via curl: medição → meta → busca no catálogo (sync lazy ok) → import (imagem baixada p/ uploads, servida com 200) → divisão (exercícios via `PUT /:id/exercises`) → sessão pré-materializada → 409 na 2ª sessão → séries completadas → finish (volume correto sem warmup, badge `first_session`, streak 1; 2ª sessão detectou PR max_weight 70>62.5 + badge `first_pr`) → last-performance/stats ok.
+- Navegador (Playwright, Pixel 7): home → modal iniciar → overview → execução → FEITO → descanso com ring → **refresh no meio do descanso retoma o countdown** → +15s/Pular → exercício concluído → finalizar → resumo → anotações salvas → histórico com gráfico → detalhe → medidas → configurações. Zero erros de console. Screenshots no scratchpad da sessão.
+- **2 bugs achados e corrigidos na verificação** (commit `a41227a`): snapshot do descanso era apagado no boot antes da hidratação (refresh caía em overview); subtítulo/destaque do descanso apontavam para a série recém-concluída em vez da próxima.
+- Falta opcional: testar `docker compose up --build` (Docker Desktop não estava rodando na máquina).
+- Dev local: Postgres em localhost:5432 (credenciais no `backend/.env`, não versionado; relógio do Postgres/WSL ~18s adiantado — por isso o cronômetro total mostra 0:00 nos primeiros segundos em dev; em produção banco e servidor compartilham relógio).
 
 ## Notas para quem retomar
 
