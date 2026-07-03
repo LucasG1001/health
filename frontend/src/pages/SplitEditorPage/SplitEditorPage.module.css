@@ -1,0 +1,397 @@
+.page {
+  max-width: var(--content-width);
+  margin: 0 auto;
+  padding: var(--spacing-xl) var(--spacing-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-base);
+}
+
+.error {
+  padding: var(--spacing-md) var(--spacing-base);
+  border-radius: var(--radius-md);
+  background: var(--color-error-subtle);
+  color: var(--color-error);
+}
+
+.loading {
+  color: var(--color-text-tertiary);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.fieldLabel {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+}
+
+.exercises {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.exerciseCard {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-base);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  animation: cardEnter var(--transition-base);
+}
+
+.exerciseHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.exerciseThumb {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--color-bg-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.exerciseThumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.exerciseThumbIcon {
+  width: 20px;
+  height: 20px;
+  color: var(--color-text-tertiary);
+}
+
+.exerciseTitles {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.exerciseName {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.exerciseMeta {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.exerciseActions {
+  display: flex;
+  gap: var(--spacing-xs);
+}
+
+.iconButton {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
+  transition: color var(--transition-fast), background var(--transition-fast), opacity var(--transition-fast);
+}
+
+.iconButton:hover:not(:disabled) {
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
+}
+
+.iconButton:disabled {
+  opacity: 0.3;
+}
+
+.removeButton:hover:not(:disabled) {
+  color: var(--color-error);
+  background: var(--color-error-subtle);
+}
+
+.iconButtonIcon {
+  width: 16px;
+  height: 16px;
+}
+
+.setsHeader {
+  display: grid;
+  grid-template-columns: 1.4fr 1.2fr 0.7fr 0.6fr 32px;
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-tertiary);
+  padding: 0 2px;
+}
+
+.setRow {
+  display: grid;
+  grid-template-columns: 1.4fr 1.2fr 0.7fr 0.6fr 32px;
+  gap: var(--spacing-xs);
+  align-items: center;
+}
+
+.setRow input,
+.setRow select {
+  width: 100%;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  min-height: 38px;
+}
+
+.setTypeCol {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.setTypeCol select {
+  font-size: var(--font-size-sm);
+}
+
+.repsCol {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.repsSep {
+  color: var(--color-text-tertiary);
+}
+
+.removeSetButton {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-tertiary);
+  transition: color var(--transition-fast), opacity var(--transition-fast);
+}
+
+.removeSetButton:hover:not(:disabled) {
+  color: var(--color-error);
+}
+
+.removeSetButton:disabled {
+  opacity: 0.25;
+}
+
+.removeSetIcon {
+  width: 14px;
+  height: 14px;
+}
+
+.exerciseFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
+}
+
+.addSetButton {
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  border: 1px dashed var(--color-border);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.addSetButton:hover {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.restField {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.restField input {
+  width: 84px;
+  min-height: 36px;
+  padding: var(--spacing-xs) var(--spacing-sm);
+}
+
+.addExerciseButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  min-height: 52px;
+  border-radius: var(--radius-lg);
+  border: 1px dashed var(--color-border);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  transition: color var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.addExerciseButton:hover {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+  background: var(--color-accent-subtle);
+}
+
+.addExerciseIcon {
+  width: 18px;
+  height: 18px;
+}
+
+.picker {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.pickerHeader {
+  display: flex;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.pickerHeader input {
+  flex: 1;
+}
+
+.pickerList {
+  max-height: 280px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.pickerItem {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-base);
+  text-align: left;
+  transition: background var(--transition-fast);
+}
+
+.pickerItem:hover {
+  background: var(--color-bg-hover);
+}
+
+.pickerItemName {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+}
+
+.pickerItemMeta {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+  flex-shrink: 0;
+}
+
+.pickerEmpty {
+  padding: var(--spacing-base);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+}
+
+.pickerLink {
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+
+.saveButton {
+  min-height: 50px;
+  border-radius: var(--radius-md);
+  background: var(--color-accent);
+  color: #fff;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  transition: background var(--transition-fast), opacity var(--transition-fast);
+}
+
+.saveButton:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+}
+
+.saveButton:disabled {
+  opacity: 0.5;
+}
+
+@media (max-width: 768px) {
+  .page {
+    padding: var(--spacing-base);
+  }
+}
+
+@media (max-width: 480px) {
+  .setsHeader {
+    display: none;
+  }
+
+  .setRow {
+    grid-template-columns: 1fr 1fr 32px;
+    grid-template-areas:
+      "type type remove"
+      "reps weight remove"
+      "rest rest remove";
+    row-gap: var(--spacing-xs);
+    padding: var(--spacing-sm);
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-md);
+  }
+
+  .setTypeCol {
+    grid-area: type;
+    flex-direction: row;
+    gap: var(--spacing-xs);
+  }
+
+  .setTypeCol select {
+    flex: 1;
+  }
+
+  .repsCol {
+    grid-area: reps;
+  }
+
+  .setRow > input:nth-of-type(1) {
+    grid-area: weight;
+  }
+
+  .setRow > input:nth-of-type(2) {
+    grid-area: rest;
+  }
+
+  .removeSetButton {
+    grid-area: remove;
+    align-self: center;
+  }
+}

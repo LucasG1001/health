@@ -1,0 +1,12 @@
+.container {
+  width: 100%;
+}
+
+.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 160px;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-base);
+}

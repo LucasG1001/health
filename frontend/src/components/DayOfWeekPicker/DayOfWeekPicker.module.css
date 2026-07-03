@@ -1,0 +1,28 @@
+.container {
+  display: flex;
+  gap: var(--spacing-xs);
+}
+
+.day {
+  flex: 1;
+  min-width: 36px;
+  min-height: 40px;
+  border-radius: var(--radius-md);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  transition: color var(--transition-fast), background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.day:hover {
+  color: var(--color-text-primary);
+}
+
+.active,
+.active:hover {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+}
