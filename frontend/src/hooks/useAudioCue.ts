@@ -15,7 +15,10 @@ function getContext(): AudioContext | null {
 
 export function useAudioCue({ soundEnabled, vibrationEnabled }: UseAudioCueOptions) {
   const optionsRef = useRef({ soundEnabled, vibrationEnabled });
-  optionsRef.current = { soundEnabled, vibrationEnabled };
+
+  useEffect(() => {
+    optionsRef.current = { soundEnabled, vibrationEnabled };
+  }, [soundEnabled, vibrationEnabled]);
 
   useEffect(() => {
     const onVisible = () => {

@@ -1,6 +1,7 @@
 import type { MuscleGroup } from "../types/exercise";
 import type { SetVariation } from "../types/split";
 import type { ActivityLevel, BloodType } from "../types/profile";
+import type { PhotoPose } from "../types/photo";
 import type { WeighInFrequency } from "../types/settings";
 
 export function formatKg(value: number | null | undefined): string {
@@ -99,6 +100,12 @@ export const ACTIVITY_LABELS: Record<ActivityLevel, string> = {
 };
 
 export const BLOOD_TYPES: BloodType[] = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
+
+export const POSE_LABELS: Record<PhotoPose, string> = {
+  front: "Frente",
+  side: "Lado",
+  back: "Costas",
+};
 
 export const FREQUENCY_LABELS: Record<WeighInFrequency, string> = {
   daily: "Diária",

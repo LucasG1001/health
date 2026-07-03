@@ -168,7 +168,7 @@ export function WorkoutHomePage() {
         </section>
       )}
 
-      <Outlet context={{ reloadSplits }} />
+      <Outlet context={{ splits, splitsLoading, reloadSplits }} />
     </div>
   );
 }

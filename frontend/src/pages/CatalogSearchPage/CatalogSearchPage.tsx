@@ -21,10 +21,10 @@ export function CatalogSearchPage() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    setLoading(true);
-    setError(null);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
+      setLoading(true);
+      setError(null);
       searchCatalog({
         q: query.trim() || undefined,
         muscleGroup: group === "all" ? undefined : group,

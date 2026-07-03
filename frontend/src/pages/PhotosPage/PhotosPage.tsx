@@ -5,15 +5,9 @@ import { EmptyState } from "../../components/EmptyState/EmptyState";
 import { ConfirmDialog } from "../../components/ConfirmDialog/ConfirmDialog";
 import { CameraIcon, CompareIcon, PlusIcon, TrashIcon } from "../../components/Icon/icons";
 import { usePhotos } from "../../hooks/usePhotos";
-import { formatDate } from "../../utils/format";
-import type { PhotoPose, ProgressPhoto } from "../../types/photo";
+import { POSE_LABELS, formatDate } from "../../utils/format";
+import type { ProgressPhoto } from "../../types/photo";
 import styles from "./PhotosPage.module.css";
-
-export const POSE_LABELS: Record<PhotoPose, string> = {
-  front: "Frente",
-  side: "Lado",
-  back: "Costas",
-};
 
 export function PhotosPage() {
   const navigate = useNavigate();

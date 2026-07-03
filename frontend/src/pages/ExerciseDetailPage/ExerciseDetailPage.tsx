@@ -43,7 +43,6 @@ export function ExerciseDetailPage() {
   useEffect(() => {
     if (!id) return;
     let active = true;
-    setLoading(true);
     Promise.all([fetchExercise(id), fetchExerciseHistory(id), fetchLastPerformance(id)])
       .then(([exerciseData, historyData, performanceData]) => {
         if (!active) return;

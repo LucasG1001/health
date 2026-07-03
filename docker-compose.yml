@@ -1,0 +1,56 @@
+name: health
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      TZ: America/Sao_Paulo
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  server:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      PORT: 3333
+      TZ: America/Sao_Paulo
+    volumes:
+      - uploads_data:/app/uploads
+    # Sem porta no host: o proxy reverso central (caddy-docker-proxy) descobre
+    # este container pela rede proxy-net via labels e termina o TLS.
+    # O Express serve o SPA, a API e /uploads na mesma porta 3333.
+    labels:
+      caddy: ${HEALTH_DOMAIN}
+      caddy.reverse_proxy: "{{upstreams 3333}}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      default:
+      proxy-net:
+      health-net:
+
+volumes:
+  postgres_data:
+  uploads_data:
+
+networks:
+  # Rede própria do projeto (criar uma vez na VPS: docker network create health-net).
+  health-net:
+    external: true
+  # Rede compartilhada com o proxy reverso central (Caddy). Criar uma vez:
+  #   docker network create proxy-net
+  proxy-net:
+    external: true

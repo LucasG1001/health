@@ -8,7 +8,7 @@ import { diffDays } from "../../utils/dateUtils";
 import { formatDate, formatKg, formatNumber, formatPct } from "../../utils/format";
 import type { PhotoPose, ProgressPhoto } from "../../types/photo";
 import type { Measurement } from "../../types/measurement";
-import { POSE_LABELS } from "../PhotosPage/PhotosPage";
+import { POSE_LABELS } from "../../utils/format";
 import styles from "./PhotoComparePage.module.css";
 
 type Mode = "side" | "overlay";

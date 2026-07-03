@@ -5,7 +5,7 @@ import { uploadPhoto } from "../../services/photoService";
 import { apiErrorMessage } from "../../utils/apiError";
 import { todayIso } from "../../utils/dateUtils";
 import type { PhotoPose } from "../../types/photo";
-import { POSE_LABELS } from "./PhotosPage";
+import { POSE_LABELS } from "../../utils/format";
 import styles from "./PhotoUploadModal.module.css";
 
 interface OutletContextValue {
