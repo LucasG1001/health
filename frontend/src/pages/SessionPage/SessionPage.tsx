@@ -233,6 +233,11 @@ export function SessionPage() {
   const performance = exerciseId ? lastPerf[exerciseId] : null;
   const nextIndex = nextExerciseIndex(session, state.currentExerciseIndex);
   const inExercise = state.phase === "exercising" || state.phase === "resting" || state.phase === "exerciseDone";
+  const nextPendingSet = exercise?.sets.find((item) => item.completedAt === null) ?? null;
+  const highlightSetIndex =
+    state.phase === "resting" && exercise && nextPendingSet
+      ? exercise.sets.indexOf(nextPendingSet)
+      : state.currentSetIndex;
 
   return (
     <div className={styles.page}>
@@ -368,7 +373,7 @@ export function SessionPage() {
 
           <div className={styles.setList}>
             {exercise.sets.map((item, index) => {
-              const isCurrent = state.phase !== "exerciseDone" && index === state.currentSetIndex;
+              const isCurrent = state.phase !== "exerciseDone" && index === highlightSetIndex;
               const isDone = item.completedAt !== null;
               return (
                 <div
@@ -417,7 +422,11 @@ export function SessionPage() {
                 remainingMs={remainingMs}
                 progress={progress}
                 preparing={preparing}
-                subtitle={set ? `próxima: ${repsTarget(set.targetRepsMin, set.targetRepsMax)} reps` : "descanso"}
+                subtitle={
+                  nextPendingSet
+                    ? `próxima: ${repsTarget(nextPendingSet.targetRepsMin, nextPendingSet.targetRepsMax)} reps`
+                    : "descanso"
+                }
               />
               <div className={styles.restActions}>
                 <button type="button" className={styles.restButton} onClick={extendRest}>

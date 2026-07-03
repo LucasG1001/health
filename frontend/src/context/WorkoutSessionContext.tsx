@@ -26,13 +26,14 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
   const [hydrating, setHydrating] = useState(true);
 
   useEffect(() => {
+    const snapshot = readSnapshot();
     let active = true;
     sessionService
       .fetchActiveSession()
       .then((session) => {
         if (!active) return;
         if (session) {
-          dispatch({ type: "HYDRATE", session, snapshot: readSnapshot() });
+          dispatch({ type: "HYDRATE", session, snapshot });
         } else {
           localStorage.removeItem(SNAPSHOT_KEY);
         }
@@ -47,13 +48,14 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (hydrating) return;
     const snapshot = toSnapshot(state);
     if (snapshot) {
       localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(snapshot));
     } else {
       localStorage.removeItem(SNAPSHOT_KEY);
     }
-  }, [state]);
+  }, [state, hydrating]);
 
   const start = useCallback(async (splitId: string) => {
     const session = await sessionService.startSession(splitId);
