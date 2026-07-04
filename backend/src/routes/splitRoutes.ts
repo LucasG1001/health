@@ -6,6 +6,7 @@ import {
   update,
   reorder,
   replaceExercises,
+  updateExercisePlan,
   remove,
 } from "../controllers/splitController.js";
 
@@ -17,6 +18,7 @@ router.post("/reorder", reorder);
 router.get("/:id", getById);
 router.put("/:id", update);
 router.put("/:id/exercises", replaceExercises);
+router.put("/:id/exercises/:splitExerciseId", updateExercisePlan);
 router.delete("/:id", remove);
 
 export { router as splitRoutes };

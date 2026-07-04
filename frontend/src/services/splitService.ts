@@ -1,5 +1,5 @@
 import { api } from "./api";
-import type { Split, SplitExerciseInput } from "../types/split";
+import type { Split, SplitExerciseInput, UpdateExercisePlanInput } from "../types/split";
 
 export async function fetchSplits(): Promise<Split[]> {
   const response = await api.get<Split[]>("/api/splits");
@@ -26,6 +26,18 @@ export async function updateSplit(
 
 export async function replaceSplitExercises(id: string, exercises: SplitExerciseInput[]): Promise<Split> {
   const response = await api.put<Split>(`/api/splits/${id}/exercises`, { exercises });
+  return response.data;
+}
+
+export async function updateExercisePlan(
+  splitId: string,
+  splitExerciseId: string,
+  input: UpdateExercisePlanInput
+): Promise<Split> {
+  const response = await api.put<Split>(
+    `/api/splits/${splitId}/exercises/${splitExerciseId}`,
+    input
+  );
   return response.data;
 }
 

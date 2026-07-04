@@ -19,6 +19,7 @@ export interface SplitExerciseRow {
   exercise_id: string;
   position: number;
   rest_seconds: number | null;
+  working_weight_kg: number | null;
   notes: string | null;
   exercise_name: string;
   muscle_group: MuscleGroup;
@@ -57,6 +58,7 @@ export interface SplitExercise {
   machineSetting: string | null;
   position: number;
   restSeconds: number | null;
+  workingWeightKg: number | null;
   notes: string | null;
   plannedSets: PlannedSet[];
 }
@@ -74,8 +76,16 @@ export interface Split {
 export interface SplitExerciseInput {
   exerciseId: string;
   notes?: string | null;
+  workingWeightKg?: number | null;
   plannedSets: {
     targetRepsMin: number;
     targetRepsMax?: number | null;
   }[];
+}
+
+export interface UpdateExercisePlanInput {
+  series: number;
+  targetRepsMin: number;
+  targetRepsMax?: number | null;
+  workingWeightKg?: number | null;
 }

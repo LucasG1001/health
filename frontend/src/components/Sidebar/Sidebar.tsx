@@ -34,12 +34,12 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
     } else if (sessionActive) {
       navigate("/treino/sessao/ativa");
     } else {
-      navigate("/treino/iniciar");
+      navigate("/treino/divisoes/nova");
     }
   };
 
   const onWorkoutArea = location.pathname.startsWith("/treino");
-  const FabIcon = onWorkoutArea ? PlayIcon : PlusIcon;
+  const FabIcon = onWorkoutArea && sessionActive ? PlayIcon : PlusIcon;
 
   const renderBarItem = (item: NavItem) => {
     const ItemIcon = item.icon;
@@ -101,7 +101,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           type="button"
           className={`${styles.barAdd} ${sessionActive ? styles.barAddActive : ""}`}
           onClick={handleAdd}
-          aria-label={onWorkoutArea ? "Iniciar treino" : "Adicionar"}
+          aria-label={onWorkoutArea ? (sessionActive ? "Retomar treino" : "Novo treino") : "Adicionar"}
         >
           <FabIcon className={styles.barAddIcon} />
         </button>

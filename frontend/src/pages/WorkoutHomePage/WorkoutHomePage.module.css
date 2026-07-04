@@ -28,55 +28,6 @@
   height: 20px;
 }
 
-.gamificationRow {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--spacing-md);
-}
-
-.streakCard,
-.prCard {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-  padding: var(--spacing-base);
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-lg);
-}
-
-.streakIcon {
-  width: 28px;
-  height: 28px;
-  color: var(--color-warning);
-  flex-shrink: 0;
-}
-
-.prIcon {
-  width: 28px;
-  height: 28px;
-  color: var(--color-accent);
-  flex-shrink: 0;
-}
-
-.streakInfo {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.streakValue {
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-bold);
-  color: var(--color-text-primary);
-  line-height: 1.2;
-}
-
-.streakLabel {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-}
-
 .resumeCard {
   display: flex;
   align-items: center;
@@ -119,28 +70,8 @@
   color: var(--color-text-secondary);
 }
 
-.todaySection {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-md);
-}
-
-.sectionTitle {
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  margin-bottom: var(--spacing-sm);
-}
-
 .loading {
   color: var(--color-text-tertiary);
-}
-
-.startError {
-  color: var(--color-error);
-  font-size: var(--font-size-sm);
 }
 
 .todayList {
@@ -185,48 +116,11 @@
   color: var(--color-text-secondary);
 }
 
-.todayPlay {
-  width: 44px;
-  height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-full);
-  background: var(--color-accent);
-  flex-shrink: 0;
-}
-
-.todayPlayIcon {
+.chevron {
   width: 20px;
   height: 20px;
-  color: #fff;
-}
-
-.restDay {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-md);
-  padding: var(--spacing-lg);
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-lg);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-base);
-}
-
-.ghostButton {
-  align-self: flex-start;
-  padding: 8px 14px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-accent);
-  color: var(--color-text-accent);
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-semibold);
-  transition: background var(--transition-fast);
-}
-
-.ghostButton:hover {
-  background: var(--color-accent-subtle);
+  color: var(--color-text-tertiary);
+  flex-shrink: 0;
 }
 
 .primaryButton {
@@ -245,89 +139,6 @@
 
 .primaryButton:hover {
   background: var(--color-accent-hover);
-}
-
-.recentList {
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-lg);
-  background: var(--color-bg-secondary);
-  overflow: hidden;
-}
-
-.recentRow {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: var(--spacing-md) var(--spacing-lg);
-  transition: background var(--transition-fast);
-}
-
-.recentRow + .recentRow {
-  border-top: 1px solid var(--color-border-subtle);
-}
-
-.recentRow:hover {
-  background: var(--color-bg-hover);
-}
-
-.recentName {
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-primary);
-}
-
-.recentMeta {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-tertiary);
-}
-
-.quickNav {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--spacing-md);
-}
-
-.quickNavItem {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-base);
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-lg);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-secondary);
-  transition: border-color var(--transition-fast), color var(--transition-fast);
-}
-
-.quickNavItem:hover {
-  border-color: var(--color-border);
-  color: var(--color-text-primary);
-}
-
-.quickNavIcon {
-  width: 22px;
-  height: 22px;
-  color: var(--color-text-accent);
-}
-
-.badgeStrip {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-sm);
-}
-
-.badgeChip {
-  padding: 5px 12px;
-  border-radius: var(--radius-full);
-  background: var(--color-accent-subtle);
-  color: var(--color-text-accent);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
 }
 
 @media (max-width: 768px) {

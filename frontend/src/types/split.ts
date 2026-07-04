@@ -21,6 +21,7 @@ export interface SplitExercise {
   machineSetting: string | null;
   position: number;
   restSeconds: number | null;
+  workingWeightKg: number | null;
   notes: string | null;
   plannedSets: PlannedSet[];
 }
@@ -43,5 +44,13 @@ export interface PlannedSetInput {
 export interface SplitExerciseInput {
   exerciseId: string;
   notes?: string | null;
+  workingWeightKg?: number | null;
   plannedSets: PlannedSetInput[];
+}
+
+export interface UpdateExercisePlanInput {
+  series: number;
+  targetRepsMin: number;
+  targetRepsMax?: number | null;
+  workingWeightKg?: number | null;
 }

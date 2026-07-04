@@ -1,12 +1,8 @@
 import { asyncHandler } from "../lib/asyncHandler.js";
 import { parseDateRange } from "../lib/validation.js";
 import { deriveBodyMetrics } from "../lib/calculations.js";
-import { APP_TIMEZONE, todayLocalIso } from "../lib/dateUtils.js";
-import { computeStreak } from "../services/streakService.js";
 import * as measurementModel from "../models/measurementModel.js";
 import * as profileModel from "../models/profileModel.js";
-import * as sessionModel from "../models/sessionModel.js";
-import * as splitModel from "../models/splitModel.js";
 import * as statsModel from "../models/statsModel.js";
 import type { ActivityLevel, BiologicalSex } from "../types/profile.js";
 
@@ -43,26 +39,4 @@ export const body = asyncHandler("Erro ao buscar a evolução corporal.", async 
 export const volume = asyncHandler("Erro ao buscar o volume de treino.", async (req, res) => {
   const groupBy = req.query.groupBy === "month" ? "month" : "week";
   res.json(await statsModel.volumeByPeriod(groupBy));
-});
-
-export const gamification = asyncHandler("Erro ao buscar as conquistas.", async (_req, res) => {
-  const [trainedDates, weekdays, badges, totalPrs, recentPrs, totalSessions] = await Promise.all([
-    sessionModel.trainedDates(APP_TIMEZONE),
-    splitModel.scheduledWeekdays(),
-    statsModel.allBadges(),
-    statsModel.totalRealPrs(),
-    statsModel.recentPrs(10),
-    statsModel.totalCompletedSessions(),
-  ]);
-  const streak = computeStreak(trainedDates, weekdays, todayLocalIso());
-
-  res.json({
-    currentStreak: streak.current,
-    longestStreak: streak.longest,
-    trainedDates,
-    badges,
-    totalPrs,
-    recentPrs,
-    totalSessions,
-  });
 });

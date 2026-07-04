@@ -4,6 +4,7 @@ import {
   createSplitSchema,
   replaceSplitExercisesSchema,
   reorderSplitsSchema,
+  updateExercisePlanSchema,
   updateSplitSchema,
 } from "../schemas/split.js";
 import * as splitModel from "../models/splitModel.js";
@@ -62,6 +63,24 @@ export const replaceExercises = asyncHandler("Erro ao salvar os exercícios da d
   const split = await splitModel.replaceExercises(String(req.params.id), parsed.data.exercises);
   if (!split) {
     res.status(404).json({ error: "Divisão não encontrada." });
+    return;
+  }
+  res.json(split);
+});
+
+export const updateExercisePlan = asyncHandler("Erro ao atualizar o exercício.", async (req, res) => {
+  const parsed = updateExercisePlanSchema.safeParse(req.body);
+  if (!parsed.success) {
+    respondValidationError(res, parsed.error);
+    return;
+  }
+  const split = await splitModel.updateExercisePlan(
+    String(req.params.id),
+    String(req.params.splitExerciseId),
+    parsed.data
+  );
+  if (!split) {
+    res.status(404).json({ error: "Exercício não encontrado nesta divisão." });
     return;
   }
   res.json(split);

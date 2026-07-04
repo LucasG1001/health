@@ -68,31 +68,11 @@ export interface SessionSetPatch {
   completed?: boolean;
 }
 
-export interface PrSummary {
-  exerciseId: string;
-  exerciseName: string;
-  recordType: "max_weight" | "max_set_volume";
-  value: number;
-  previousValue: number | null;
-}
-
-export interface BadgeSummary {
-  id: string;
-  code: string;
-  name: string;
-  description: string;
-  icon: string;
-  category: string;
-}
-
 export interface FinishSummary {
   durationSeconds: number;
   totalVolumeKg: number;
   completedSets: number;
   plannedSets: number;
-  prs: PrSummary[];
-  newBadges: BadgeSummary[];
-  currentStreak: number;
 }
 
 export interface FinishResponse {

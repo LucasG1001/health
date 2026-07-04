@@ -1,5 +1,4 @@
 import { pool } from "./connection.js";
-import { seedBadges } from "./seedBadges.js";
 
 export async function migrate(): Promise<void> {
   await pool.query(`
@@ -168,6 +167,10 @@ export async function migrate(): Promise<void> {
   `);
 
   await pool.query(`
+    ALTER TABLE split_exercises ADD COLUMN IF NOT EXISTS working_weight_kg NUMERIC(6,2);
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS planned_sets (
       id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       split_exercise_id    UUID NOT NULL REFERENCES split_exercises(id) ON DELETE CASCADE,
@@ -297,6 +300,4 @@ export async function migrate(): Promise<void> {
       awarded_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
-
-  await seedBadges();
 }
