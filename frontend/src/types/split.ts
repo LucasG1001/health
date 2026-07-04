@@ -7,12 +7,8 @@ export type SetVariation = "normal" | "drop_set" | "bi_set" | "superset" | "rest
 export interface PlannedSet {
   id: string;
   position: number;
-  setType: SetType;
-  variation: SetVariation;
   targetRepsMin: number;
   targetRepsMax: number | null;
-  suggestedWeightKg: number | null;
-  restSeconds: number | null;
 }
 
 export interface SplitExercise {
@@ -40,17 +36,12 @@ export interface Split {
 }
 
 export interface PlannedSetInput {
-  setType: SetType;
-  variation: SetVariation;
   targetRepsMin: number;
   targetRepsMax?: number | null;
-  suggestedWeightKg?: number | null;
-  restSeconds?: number | null;
 }
 
 export interface SplitExerciseInput {
   exerciseId: string;
-  restSeconds?: number | null;
   notes?: string | null;
   plannedSets: PlannedSetInput[];
 }

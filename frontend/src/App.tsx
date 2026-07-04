@@ -13,7 +13,6 @@ import { PhotosPage } from "./pages/PhotosPage/PhotosPage";
 import { PhotoUploadModal } from "./pages/PhotosPage/PhotoUploadModal";
 import { PhotoComparePage } from "./pages/PhotoComparePage/PhotoComparePage";
 import { WorkoutHomePage } from "./pages/WorkoutHomePage/WorkoutHomePage";
-import { StartSessionModal } from "./pages/WorkoutHomePage/StartSessionModal";
 import { SplitsPage } from "./pages/SplitsPage/SplitsPage";
 import { SplitEditorPage } from "./pages/SplitEditorPage/SplitEditorPage";
 import { ExercisesPage } from "./pages/ExercisesPage/ExercisesPage";
@@ -61,9 +60,7 @@ function Layout() {
             <Route path="nova" element={<PhotoUploadModal />} />
           </Route>
           <Route path="/medidas/fotos/comparar" element={<PhotoComparePage />} />
-          <Route path="/treino" element={<WorkoutHomePage />}>
-            <Route path="iniciar" element={<StartSessionModal />} />
-          </Route>
+          <Route path="/treino" element={<WorkoutHomePage />} />
           <Route path="/treino/divisoes" element={<SplitsPage />} />
           <Route path="/treino/divisoes/nova" element={<SplitEditorPage />} />
           <Route path="/treino/divisoes/:id" element={<SplitEditorPage />} />

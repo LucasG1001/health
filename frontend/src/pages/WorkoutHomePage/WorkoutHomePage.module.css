@@ -138,6 +138,11 @@
   color: var(--color-text-tertiary);
 }
 
+.startError {
+  color: var(--color-error);
+  font-size: var(--font-size-sm);
+}
+
 .todayList {
   display: flex;
   flex-direction: column;

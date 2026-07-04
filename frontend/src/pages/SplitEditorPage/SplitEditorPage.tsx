@@ -10,18 +10,14 @@ import {
 } from "../../components/Icon/icons";
 import { useExercises } from "../../hooks/useExercises";
 import { createSplit, fetchSplit, replaceSplitExercises, updateSplit } from "../../services/splitService";
-import { MUSCLE_GROUP_LABELS, VARIATION_LABELS } from "../../utils/format";
+import { MUSCLE_GROUP_LABELS } from "../../utils/format";
 import { apiErrorMessage } from "../../utils/apiError";
-import type { SetType, SetVariation, SplitExerciseInput } from "../../types/split";
+import type { SplitExerciseInput } from "../../types/split";
 import styles from "./SplitEditorPage.module.css";
 
 interface DraftSet {
-  setType: SetType;
-  variation: SetVariation;
   targetRepsMin: string;
   targetRepsMax: string;
-  suggestedWeightKg: string;
-  restSeconds: string;
 }
 
 interface DraftExercise {
@@ -29,29 +25,18 @@ interface DraftExercise {
   name: string;
   muscleGroupLabel: string;
   imageUrl: string | null;
-  restSeconds: string;
   sets: DraftSet[];
 }
 
 const DEFAULT_SET: DraftSet = {
-  setType: "working",
-  variation: "normal",
   targetRepsMin: "12",
   targetRepsMax: "",
-  suggestedWeightKg: "",
-  restSeconds: "",
 };
 
 function parseIntOrNull(raw: string): number | null {
   if (raw.trim() === "") return null;
   const parsed = Number(raw);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
-}
-
-function parseFloatOrNull(raw: string): number | null {
-  if (raw.trim() === "") return null;
-  const parsed = Number(raw.replace(",", "."));
-  return Number.isNaN(parsed) ? null : parsed;
 }
 
 export function SplitEditorPage() {
@@ -82,15 +67,9 @@ export function SplitEditorPage() {
             name: exercise.name,
             muscleGroupLabel: MUSCLE_GROUP_LABELS[exercise.muscleGroup],
             imageUrl: exercise.imageUrl,
-            restSeconds: exercise.restSeconds != null ? String(exercise.restSeconds) : "",
             sets: exercise.plannedSets.map((set) => ({
-              setType: set.setType,
-              variation: set.variation,
               targetRepsMin: String(set.targetRepsMin),
               targetRepsMax: set.targetRepsMax != null ? String(set.targetRepsMax) : "",
-              suggestedWeightKg:
-                set.suggestedWeightKg != null ? String(set.suggestedWeightKg).replace(".", ",") : "",
-              restSeconds: set.restSeconds != null ? String(set.restSeconds) : "",
             })),
           }))
         );
@@ -148,12 +127,8 @@ export function SplitEditorPage() {
     for (const draft of drafts) {
       const sets = draft.sets
         .map((set) => ({
-          setType: set.setType,
-          variation: set.variation,
           targetRepsMin: parseIntOrNull(set.targetRepsMin) ?? 0,
           targetRepsMax: parseIntOrNull(set.targetRepsMax),
-          suggestedWeightKg: parseFloatOrNull(set.suggestedWeightKg),
-          restSeconds: parseIntOrNull(set.restSeconds),
         }))
         .filter((set) => set.targetRepsMin > 0);
       if (sets.length === 0) {
@@ -162,7 +137,6 @@ export function SplitEditorPage() {
       }
       exercisesPayload.push({
         exerciseId: draft.exerciseId,
-        restSeconds: parseIntOrNull(draft.restSeconds),
         plannedSets: sets,
       });
     }
@@ -244,32 +218,12 @@ export function SplitEditorPage() {
                 <div className={styles.setsHeader}>
                   <span>Série</span>
                   <span>Reps</span>
-                  <span>Peso</span>
-                  <span>Desc.</span>
                   <span />
                 </div>
 
                 {draft.sets.map((set, setIndex) => (
                   <div key={setIndex} className={styles.setRow}>
-                    <div className={styles.setTypeCol}>
-                      <select
-                        value={set.setType}
-                        onChange={(e) => updateSet(exerciseIndex, setIndex, { setType: e.target.value as SetType })}
-                        aria-label="Tipo de série"
-                      >
-                        <option value="working">Valendo</option>
-                        <option value="warmup">Aquec.</option>
-                      </select>
-                      <select
-                        value={set.variation}
-                        onChange={(e) => updateSet(exerciseIndex, setIndex, { variation: e.target.value as SetVariation })}
-                        aria-label="Variação"
-                      >
-                        {(Object.keys(VARIATION_LABELS) as SetVariation[]).map((variation) => (
-                          <option key={variation} value={variation}>{VARIATION_LABELS[variation]}</option>
-                        ))}
-                      </select>
-                    </div>
+                    <span className={styles.setNumber}>{setIndex + 1}ª</span>
                     <div className={styles.repsCol}>
                       <input
                         type="text"
@@ -288,22 +242,6 @@ export function SplitEditorPage() {
                         aria-label="Repetições máximas"
                       />
                     </div>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      placeholder="kg"
-                      value={set.suggestedWeightKg}
-                      onChange={(e) => updateSet(exerciseIndex, setIndex, { suggestedWeightKg: e.target.value })}
-                      aria-label="Peso sugerido"
-                    />
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      placeholder="s"
-                      value={set.restSeconds}
-                      onChange={(e) => updateSet(exerciseIndex, setIndex, { restSeconds: e.target.value })}
-                      aria-label="Descanso em segundos"
-                    />
                     <button
                       type="button"
                       className={styles.removeSetButton}
@@ -330,16 +268,6 @@ export function SplitEditorPage() {
                   >
                     + série
                   </button>
-                  <label className={styles.restField}>
-                    <span>Descanso padrão (s)</span>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      placeholder="settings"
-                      value={draft.restSeconds}
-                      onChange={(e) => updateDraft(exerciseIndex, { restSeconds: e.target.value })}
-                    />
-                  </label>
                 </div>
               </section>
             ))}
@@ -373,7 +301,6 @@ export function SplitEditorPage() {
                           name: exercise.name,
                           muscleGroupLabel: MUSCLE_GROUP_LABELS[exercise.muscleGroup],
                           imageUrl: exercise.imageUrl,
-                          restSeconds: "",
                           sets: [
                             { ...DEFAULT_SET },
                             { ...DEFAULT_SET },

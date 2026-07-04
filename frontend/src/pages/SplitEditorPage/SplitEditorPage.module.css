@@ -136,7 +136,7 @@
 
 .setsHeader {
   display: grid;
-  grid-template-columns: 1.4fr 1.2fr 0.7fr 0.6fr 32px;
+  grid-template-columns: 40px 1fr 32px;
   gap: var(--spacing-xs);
   font-size: var(--font-size-xs);
   text-transform: uppercase;
@@ -147,26 +147,21 @@
 
 .setRow {
   display: grid;
-  grid-template-columns: 1.4fr 1.2fr 0.7fr 0.6fr 32px;
+  grid-template-columns: 40px 1fr 32px;
   gap: var(--spacing-xs);
   align-items: center;
 }
 
-.setRow input,
-.setRow select {
+.setRow input {
   width: 100%;
   padding: var(--spacing-xs) var(--spacing-sm);
   min-height: 38px;
 }
 
-.setTypeCol {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.setTypeCol select {
+.setNumber {
   font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
 }
 
 .repsCol {
@@ -224,20 +219,6 @@
 .addSetButton:hover {
   color: var(--color-accent);
   border-color: var(--color-accent);
-}
-
-.restField {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-}
-
-.restField input {
-  width: 84px;
-  min-height: 36px;
-  padding: var(--spacing-xs) var(--spacing-sm);
 }
 
 .addExerciseButton {
@@ -352,46 +333,7 @@
 }
 
 @media (max-width: 480px) {
-  .setsHeader {
-    display: none;
-  }
-
-  .setRow {
-    grid-template-columns: 1fr 1fr 32px;
-    grid-template-areas:
-      "type type remove"
-      "reps weight remove"
-      "rest rest remove";
-    row-gap: var(--spacing-xs);
-    padding: var(--spacing-sm);
-    border: 1px solid var(--color-border-subtle);
-    border-radius: var(--radius-md);
-  }
-
-  .setTypeCol {
-    grid-area: type;
-    flex-direction: row;
-    gap: var(--spacing-xs);
-  }
-
-  .setTypeCol select {
-    flex: 1;
-  }
-
-  .repsCol {
-    grid-area: reps;
-  }
-
-  .setRow > input:nth-of-type(1) {
-    grid-area: weight;
-  }
-
-  .setRow > input:nth-of-type(2) {
-    grid-area: rest;
-  }
-
-  .removeSetButton {
-    grid-area: remove;
-    align-self: center;
+  .page {
+    padding: var(--spacing-base);
   }
 }

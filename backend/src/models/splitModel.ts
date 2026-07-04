@@ -39,12 +39,8 @@ function toSplitExercise(row: SplitExerciseRow, plannedSetRows: PlannedSetRow[])
       .map((set) => ({
         id: set.id,
         position: set.position,
-        setType: set.set_type,
-        variation: set.variation,
         targetRepsMin: set.target_reps_min,
         targetRepsMax: set.target_reps_max,
-        suggestedWeightKg: set.suggested_weight_kg,
-        restSeconds: set.rest_seconds,
       })),
   };
 }
@@ -167,10 +163,10 @@ export async function replaceExercises(
     for (let i = 0; i < exercises.length; i++) {
       const exercise = exercises[i]!;
       const inserted = await client.query<{ id: string }>(
-        `INSERT INTO split_exercises (split_id, exercise_id, position, rest_seconds, notes)
-         VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO split_exercises (split_id, exercise_id, position, notes)
+         VALUES ($1, $2, $3, $4)
          RETURNING id`,
-        [splitId, exercise.exerciseId, i, exercise.restSeconds ?? null, exercise.notes ?? null]
+        [splitId, exercise.exerciseId, i, exercise.notes ?? null]
       );
       const splitExerciseId = inserted.rows[0]!.id;
 
@@ -178,18 +174,9 @@ export async function replaceExercises(
         const set = exercise.plannedSets[j]!;
         await client.query(
           `INSERT INTO planned_sets
-             (split_exercise_id, position, set_type, variation, target_reps_min, target_reps_max, suggested_weight_kg, rest_seconds)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-          [
-            splitExerciseId,
-            j,
-            set.setType,
-            set.variation,
-            set.targetRepsMin,
-            set.targetRepsMax ?? null,
-            set.suggestedWeightKg ?? null,
-            set.restSeconds ?? null,
-          ]
+             (split_exercise_id, position, target_reps_min, target_reps_max)
+           VALUES ($1, $2, $3, $4)`,
+          [splitExerciseId, j, set.targetRepsMin, set.targetRepsMax ?? null]
         );
       }
     }

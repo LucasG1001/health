@@ -1,4 +1,5 @@
-import { Link, Outlet, useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { EmptyState } from "../../components/EmptyState/EmptyState";
 import {
@@ -14,20 +15,34 @@ import { useWorkoutSession } from "../../context/workoutSessionStore";
 import { useSplits } from "../../hooks/useSplits";
 import { useGamification } from "../../hooks/useGamification";
 import { useSessionHistory } from "../../hooks/useSessionHistory";
-import { currentWeekday } from "../../utils/dateUtils";
+import { apiErrorMessage } from "../../utils/apiError";
 import { formatDateTime, formatDuration, formatKg, formatNumber } from "../../utils/format";
 import styles from "./WorkoutHomePage.module.css";
 
 export function WorkoutHomePage() {
   const navigate = useNavigate();
-  const { state } = useWorkoutSession();
-  const { splits, loading: splitsLoading, reload: reloadSplits } = useSplits();
+  const { state, start } = useWorkoutSession();
+  const { splits, loading: splitsLoading } = useSplits();
   const { gamification } = useGamification();
   const { sessions } = useSessionHistory(5);
 
+  const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
+
   const sessionActive = state.session !== null && state.session.status === "in_progress";
-  const today = currentWeekday();
-  const todaySplits = splits.filter((split) => split.weekdays.includes(today));
+
+  const startSplit = async (splitId: string) => {
+    if (starting) return;
+    setStarting(true);
+    setStartError(null);
+    try {
+      await start(splitId);
+      navigate("/treino/sessao/ativa");
+    } catch (err) {
+      setStartError(apiErrorMessage(err, "Não foi possível iniciar o treino."));
+      setStarting(false);
+    }
+  };
 
   return (
     <div className={styles.page}>
@@ -76,17 +91,19 @@ export function WorkoutHomePage() {
         </button>
       ) : (
         <section className={styles.todaySection}>
-          <h2 className={styles.sectionTitle}>Treino de hoje</h2>
+          <h2 className={styles.sectionTitle}>Escolha o treino</h2>
+          {startError && <p className={styles.startError}>{startError}</p>}
           {splitsLoading ? (
             <p className={styles.loading}>Carregando…</p>
-          ) : todaySplits.length > 0 ? (
+          ) : splits.length > 0 ? (
             <div className={styles.todayList}>
-              {todaySplits.map((split) => (
+              {splits.map((split) => (
                 <button
                   key={split.id}
                   type="button"
                   className={styles.todayCard}
-                  onClick={() => navigate("/treino/iniciar", { state: { splitId: split.id } })}
+                  onClick={() => startSplit(split.id)}
+                  disabled={starting}
                 >
                   <div className={styles.todayInfo}>
                     <span className={styles.todayName}>{split.name}</span>
@@ -97,13 +114,6 @@ export function WorkoutHomePage() {
                   </span>
                 </button>
               ))}
-            </div>
-          ) : splits.length > 0 ? (
-            <div className={styles.restDay}>
-              <p>Hoje é dia de descanso. Quer treinar mesmo assim?</p>
-              <button type="button" className={styles.ghostButton} onClick={() => navigate("/treino/iniciar")}>
-                Escolher divisão
-              </button>
             </div>
           ) : (
             <EmptyState
@@ -167,8 +177,6 @@ export function WorkoutHomePage() {
           </div>
         </section>
       )}
-
-      <Outlet context={{ splits, splitsLoading, reloadSplits }} />
     </div>
   );
 }

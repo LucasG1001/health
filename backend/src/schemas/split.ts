@@ -1,8 +1,5 @@
 import { z } from "zod";
 
-const SET_TYPES = ["warmup", "working"] as const;
-const VARIATIONS = ["normal", "drop_set", "bi_set", "superset", "rest_pause"] as const;
-
 const baseSplit = z.object({
   name: z.string().min(1, "Informe o nome da divisão.").max(200),
   weekdays: z.array(z.number().int().min(0).max(6)).max(7, "Dias da semana inválidos."),
@@ -17,12 +14,8 @@ export const reorderSplitsSchema = z.object({
 });
 
 const plannedSetSchema = z.object({
-  setType: z.enum(SET_TYPES, "Tipo de série inválido."),
-  variation: z.enum(VARIATIONS, "Variação inválida."),
   targetRepsMin: z.number().int().min(1, "Repetições alvo inválidas.").max(200),
   targetRepsMax: z.number().int().min(1).max(200).nullish(),
-  suggestedWeightKg: z.number().min(0).max(2000).nullish(),
-  restSeconds: z.number().int().min(5).max(600).nullish(),
 });
 
 export const replaceSplitExercisesSchema = z.object({
@@ -30,7 +23,6 @@ export const replaceSplitExercisesSchema = z.object({
     .array(
       z.object({
         exerciseId: z.uuid("Exercício inválido."),
-        restSeconds: z.number().int().min(5).max(600).nullish(),
         notes: z.string().max(2000).nullish(),
         plannedSets: z.array(plannedSetSchema).min(1, "Cada exercício precisa de ao menos uma série."),
       })
