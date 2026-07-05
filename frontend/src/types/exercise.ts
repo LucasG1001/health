@@ -21,6 +21,7 @@ export interface Exercise {
   hasUploadedImage: boolean;
   machineSetting: string | null;
   notes: string | null;
+  videoUrl: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -32,6 +33,7 @@ export interface ExerciseInput {
   imageUrl?: string | null;
   machineSetting?: string | null;
   notes?: string | null;
+  videoUrl?: string | null;
 }
 
 export interface LastPerformanceSet {

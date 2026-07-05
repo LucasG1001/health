@@ -35,6 +35,8 @@ function toSplitExercise(row: SplitExerciseRow, plannedSetRows: PlannedSetRow[])
     position: row.position,
     restSeconds: row.rest_seconds,
     workingWeightKg: row.working_weight_kg,
+    videoUrl: row.video_url,
+    instructions: row.exercise_notes,
     notes: row.notes,
     plannedSets: plannedSetRows
       .filter((set) => set.split_exercise_id === row.id)
@@ -49,7 +51,8 @@ function toSplitExercise(row: SplitExerciseRow, plannedSetRows: PlannedSetRow[])
 
 const EXERCISES_SQL = `
   SELECT se.id, se.split_id, se.exercise_id, se.position, se.rest_seconds, se.working_weight_kg, se.notes,
-         e.name AS exercise_name, e.muscle_group, e.equipment, e.image_path, e.image_url, e.machine_setting
+         e.name AS exercise_name, e.muscle_group, e.equipment, e.image_path, e.image_url, e.machine_setting,
+         e.video_url, e.notes AS exercise_notes
     FROM split_exercises se
     JOIN exercises e ON e.id = se.exercise_id
 `;

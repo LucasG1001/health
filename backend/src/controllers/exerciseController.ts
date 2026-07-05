@@ -1,15 +1,9 @@
-import { z } from "zod";
 import { asyncHandler } from "../lib/asyncHandler.js";
 import { parseDateRange, respondValidationError } from "../lib/validation.js";
-import { downloadToUploads, relativeUploadPath, removeUploadedFile } from "../lib/upload.js";
+import { relativeUploadPath, removeUploadedFile } from "../lib/upload.js";
 import { createExerciseSchema, updateExerciseSchema } from "../schemas/exercise.js";
 import * as exerciseModel from "../models/exerciseModel.js";
-import * as catalogModel from "../models/catalogModel.js";
 import type { MuscleGroup } from "../types/exercise.js";
-
-const importSchema = z.object({
-  catalogId: z.uuid("Item do catálogo inválido."),
-});
 
 const MUSCLE_GROUPS: MuscleGroup[] = [
   "chest",
@@ -50,37 +44,6 @@ export const create = asyncHandler("Erro ao criar o exercício.", async (req, re
     return;
   }
   res.status(201).json(await exerciseModel.create(parsed.data));
-});
-
-export const importFromCatalog = asyncHandler("Erro ao importar o exercício.", async (req, res) => {
-  const parsed = importSchema.safeParse(req.body);
-  if (!parsed.success) {
-    respondValidationError(res, parsed.error);
-    return;
-  }
-
-  const item = await catalogModel.findById(parsed.data.catalogId);
-  if (!item) {
-    res.status(404).json({ error: "Exercício não encontrado no catálogo." });
-    return;
-  }
-  if (item.importedExerciseId) {
-    const existing = await exerciseModel.findById(item.importedExerciseId);
-    res.status(409).json({ error: "Este exercício já está no seu catálogo.", exercise: existing });
-    return;
-  }
-
-  const imagePath = item.imageUrls[0] ? await downloadToUploads("exercises", item.imageUrls[0]) : null;
-  const exercise = await exerciseModel.create({
-    name: item.name,
-    muscleGroup: item.muscleGroup,
-    equipment: item.equipment,
-    notes: item.instructions,
-    externalId: item.externalId,
-    imagePath,
-    imageUrl: imagePath ? null : (item.imageUrls[0] ?? null),
-  });
-  res.status(201).json(exercise);
 });
 
 export const update = asyncHandler("Erro ao atualizar o exercício.", async (req, res) => {

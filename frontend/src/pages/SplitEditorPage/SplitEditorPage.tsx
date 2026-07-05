@@ -324,9 +324,9 @@ export function SplitEditorPage() {
                     <button
                       type="button"
                       className={styles.pickerLink}
-                      onClick={() => navigate("/treino/exercicios/buscar")}
+                      onClick={() => navigate("/treino/exercicios/novo")}
                     >
-                      Buscar na base ExerciseDB
+                      Cadastrar exercício
                     </button>
                   </p>
                 )}

@@ -7,7 +7,7 @@ Este arquivo orienta o Claude Code (claude.ai/code) ao trabalhar neste repositó
 **Health** é um PWA pessoal full-stack (usuário único, sem auth, online-only, mobile-first) de saúde e treino de musculação, com duas áreas:
 
 - **Medidas** — medições corporais com gráficos, metas, fotos de progresso com comparador e perfil de saúde (IMC/TMB/TDEE derivados em `lib/calculations.ts`).
-- **Treino** — catálogo de exercícios (importável da free-exercise-db + cadastro manual), divisões com protocolo de séries e **execução guiada de sessão** (timer de descanso com cues sonoros/vibração, wake lock, PRs, badges, streak).
+- **Treino** — catálogo **próprio** de exercícios (cadastro com imagem, vídeo do YouTube e instruções de execução), treinos (divisões) com séries/reps e **carga por exercício**, e **execução guiada de sessão** (timer de descanso com cues sonoros/vibração, wake lock). Sem PRs/streak/conquistas.
 
 ## Comandos de desenvolvimento
 
@@ -30,7 +30,6 @@ Pré-requisito local: PostgreSQL acessível (banco `health`). `migrate()` + seed
 
 ```
 Browser → Caddy (proxy central, TLS) → Express (server :3333, serve SPA + API + /uploads) → PostgreSQL
-                                                  └──(catalogSyncService, lazy)──▶ free-exercise-db (GitHub raw)
 ```
 
 Em produção o Express serve o build do frontend (`backend/public`, copiado na imagem) com fallback de SPA, a API em `/api` e uploads em `/uploads` (volume) na porta 3333. Em dev o Vite serve o frontend com proxy.
@@ -40,10 +39,10 @@ Em produção o Express serve o build do frontend (`backend/public`, copiado na 
 Padrão em camadas por domínio: `types/` → `models/` (pg puro, mapper snake→camel, queries parametrizadas) → `schemas/` (Zod) → `controllers/` (asyncHandler + Zod, erros `{ error: "msg PT" }`) → `routes/`.
 
 - **`database/`** — `connection.ts` (pool + type parsers de NUMERIC/DATE→number/string), `migrate.ts` (DDL idempotente), `seedBadges.ts`.
-- **Domínios**: profile, settings, measurement, goal (1 ativa — índice único parcial), photo (multer), exercise, split, session, catalog, stats.
+- **Domínios**: profile, settings, measurement, goal (1 ativa — índice único parcial), photo (multer), exercise (catálogo próprio, com `video_url`), split, session, stats.
 - **Sessão**: pré-materializada no start (`session_sets` copiados dos `planned_sets` com targets/descanso/peso sugerido). "Feito" = `PUT /api/session-sets/:id {completed:true, weightKg, reps, rpe?, rir?}`. Só 1 sessão `in_progress` (índice único parcial).
 - **`services/sessionFinishService.ts`** — finalização em **transação**: volume, PRs, badges, streak. **`prDetection.ts`** — PRs append-only com baseline (previous_value NULL não conta como PR). **`streakService.ts`** — streak on-demand (dias não programados não quebram). Todos testados.
-- **`services/catalogSyncService.ts`** — sincroniza o JSON completo da free-exercise-db para `catalog_exercises` (lazy, na primeira busca); importar baixa a 1ª imagem para uploads (`lib/upload.ts`).
+- **Catálogo próprio** — exercícios cadastrados pelo usuário (`exercises`), cada um com imagem (upload via `lib/upload.ts`), `video_url` (link YouTube) e `notes` (instruções de execução). Não há mais integração com base externa (free-exercise-db removida).
 
 ### Frontend (`frontend/src/`)
 
@@ -56,7 +55,7 @@ Padrão em camadas por domínio: `types/` → `models/` (pg puro, mapper snake�
 
 ### Schema do banco (principais)
 
-`profile` (linha única) · `settings` (linha única) · `measurements` · `goals` (índice único parcial p/ ativa) · `progress_photos` · `exercises` (catálogo local) · `catalog_exercises` (espelho da base externa) · `splits` + `split_exercises` + `planned_sets` · `workout_sessions` (índice único parcial p/ in_progress) + `session_exercises` + `session_sets` · `personal_records` (append-only) · `badges` + `awarded_badges`.
+`profile` (linha única) · `settings` (linha única) · `measurements` · `goals` (índice único parcial p/ ativa) · `progress_photos` · `exercises` (catálogo próprio; `video_url`, `notes`=execução) · `splits` + `split_exercises` (`working_weight_kg` = carga por exercício) + `planned_sets` · `workout_sessions` (índice único parcial p/ in_progress) + `session_exercises` + `session_sets`. Tabelas `catalog_exercises`, `personal_records`, `badges`/`awarded_badges` permanecem no schema mas estão **inativas** (integração ExerciseDB e gamificação removidas).
 
 ## Convenções
 

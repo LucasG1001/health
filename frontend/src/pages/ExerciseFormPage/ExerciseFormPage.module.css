@@ -1,0 +1,98 @@
+.page {
+  max-width: var(--content-width);
+  margin: 0 auto;
+  padding: var(--spacing-xl) var(--spacing-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+.error {
+  padding: var(--spacing-md) var(--spacing-base);
+  border-radius: var(--radius-md);
+  background: var(--color-error-subtle);
+  color: var(--color-error);
+}
+
+.loading {
+  color: var(--color-text-tertiary);
+}
+
+.imageCard {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid var(--color-border-subtle);
+  cursor: pointer;
+  min-height: 160px;
+  max-height: 300px;
+}
+
+.imageCard img {
+  width: 100%;
+  max-height: 300px;
+  object-fit: contain;
+}
+
+.imagePlaceholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-sm);
+  width: 100%;
+  padding: var(--spacing-2xl);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-sm);
+  text-align: center;
+}
+
+.placeholderIcon {
+  width: 40px;
+  height: 40px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.fieldLabel {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+}
+
+.textarea {
+  resize: vertical;
+  min-height: 96px;
+  font-family: inherit;
+}
+
+.saveButton {
+  min-height: 50px;
+  border-radius: var(--radius-md);
+  background: var(--color-accent);
+  color: #fff;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  transition: background var(--transition-fast), opacity var(--transition-fast);
+}
+
+.saveButton:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+}
+
+.saveButton:disabled {
+  opacity: 0.5;
+}
+
+@media (max-width: 768px) {
+  .page {
+    padding: var(--spacing-base);
+  }
+}

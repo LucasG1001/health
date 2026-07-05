@@ -21,6 +21,7 @@ export interface ExerciseRow {
   image_url: string | null;
   machine_setting: string | null;
   notes: string | null;
+  video_url: string | null;
   external_id: string | null;
   created_at: Date;
   updated_at: Date;
@@ -35,6 +36,7 @@ export interface Exercise {
   hasUploadedImage: boolean;
   machineSetting: string | null;
   notes: string | null;
+  videoUrl: string | null;
   externalId: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -47,6 +49,7 @@ export interface NewExercise {
   imageUrl?: string | null;
   machineSetting?: string | null;
   notes?: string | null;
+  videoUrl?: string | null;
   externalId?: string | null;
   imagePath?: string | null;
 }

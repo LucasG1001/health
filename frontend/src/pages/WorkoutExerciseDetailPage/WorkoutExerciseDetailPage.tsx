@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { ConfirmDialog } from "../../components/ConfirmDialog/ConfirmDialog";
+import { YouTubeEmbed } from "../../components/YouTubeEmbed/YouTubeEmbed";
 import { DumbbellIcon, PencilIcon, TrashIcon } from "../../components/Icon/icons";
 import { fetchSplit, replaceSplitExercises, updateExercisePlan } from "../../services/splitService";
 import { MUSCLE_GROUP_LABELS } from "../../utils/format";
@@ -133,15 +134,19 @@ export function WorkoutExerciseDetailPage() {
 
       {exercise && (
         <>
-          <div className={styles.imageCard}>
-            {exercise.imageUrl ? (
-              <img src={exercise.imageUrl} alt={exercise.name} />
-            ) : (
-              <span className={styles.imagePlaceholder}>
-                <DumbbellIcon className={styles.placeholderIcon} />
-              </span>
-            )}
-          </div>
+          {exercise.videoUrl ? (
+            <YouTubeEmbed url={exercise.videoUrl} title={exercise.name} />
+          ) : (
+            <div className={styles.imageCard}>
+              {exercise.imageUrl ? (
+                <img src={exercise.imageUrl} alt={exercise.name} />
+              ) : (
+                <span className={styles.imagePlaceholder}>
+                  <DumbbellIcon className={styles.placeholderIcon} />
+                </span>
+              )}
+            </div>
+          )}
 
           <div className={styles.editGrid}>
             <div className={styles.editField}>
@@ -198,6 +203,13 @@ export function WorkoutExerciseDetailPage() {
               </div>
             </div>
           </div>
+
+          {exercise.instructions && (
+            <section className={styles.instructionsSection}>
+              <h2 className={styles.instructionsTitle}>Como executar</h2>
+              <p className={styles.instructions}>{exercise.instructions}</p>
+            </section>
+          )}
         </>
       )}
 

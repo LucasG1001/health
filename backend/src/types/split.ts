@@ -27,6 +27,8 @@ export interface SplitExerciseRow {
   image_path: string | null;
   image_url: string | null;
   machine_setting: string | null;
+  video_url: string | null;
+  exercise_notes: string | null;
 }
 
 export interface PlannedSetRow {
@@ -59,6 +61,8 @@ export interface SplitExercise {
   position: number;
   restSeconds: number | null;
   workingWeightKg: number | null;
+  videoUrl: string | null;
+  instructions: string | null;
   notes: string | null;
   plannedSets: PlannedSet[];
 }

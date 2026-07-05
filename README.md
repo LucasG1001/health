@@ -9,21 +9,20 @@ A navegação é feita por uma Sidebar (vira barra inferior no mobile). A tela d
 
 ## Treino — como funciona
 
-- **Catálogo**: busque exercícios da base pública [free-exercise-db](https://github.com/yuhonas/free-exercise-db) (~870 exercícios com foto) e importe para o catálogo local; a foto é baixada para o volume de uploads. Cadastro manual (com upload ou URL de imagem) continua disponível.
-- **Divisões**: cada divisão tem dias da semana, exercícios ordenados e protocolo de séries (aquecimento/válida, faixa de reps, peso sugerido, descanso e variação: drop set, bi-set…).
-- **Sessão**: ao iniciar, as séries planejadas são **pré-materializadas** — cada "FEITO" grava peso/reps/RPE e dispara o descanso. Só existe **uma sessão em andamento** por vez; uma barra fixa permite voltar para ela de qualquer tela.
-- **Finalização**: transação calcula volume total, detecta PRs (maior carga / maior volume em série, com baseline — o primeiro registro não conta como PR), concede badges e atualiza a streak (dias não programados não quebram a sequência). O resumo mostra tudo e aceita anotações.
+- **Catálogo próprio**: você cadastra cada exercício (acessível pelo header do Treino) com imagem (upload), link de vídeo do YouTube e instruções de execução, além de grupo muscular, equipamento e ajuste do aparelho.
+- **Treinos (divisões)**: cada treino tem dias da semana e exercícios ordenados; por exercício define-se número de séries, faixa de reps e **carga (kg)** — editados na tela de detalhe do exercício dentro do treino.
+- **Sessão**: abrir um treino leva à tela de gerenciar; "Começar treino" pré-materializa as séries (peso pré-preenchido pela carga) — cada "FEITO" grava peso/reps e dispara o descanso. Só existe **uma sessão em andamento** por vez; uma barra fixa permite voltar para ela.
+- **Finalização**: transação calcula volume total e duração e marca o treino como concluído; o resumo aceita anotações e o treino entra no Histórico.
 
 ## Arquitetura
 
 ```
 Browser → Caddy (proxy central, TLS) → Express (server :3333, serve SPA + API + /uploads) → PostgreSQL
-                                                  └──(sync do catálogo, lazy)──▶ free-exercise-db (GitHub raw)
 ```
 
 - Em produção não há nginx: o Express serve o build do frontend (`backend/public`, copiado na imagem) com fallback de SPA, a API em `/api` e as imagens em `/uploads` (volume `uploads_data`) na mesma porta 3333.
-- O `migrate()` roda no startup (DDL idempotente) e o seed de badges também. O catálogo (`catalog_exercises`) é sincronizado da free-exercise-db na primeira busca.
-- Backend em camadas: `types → models (pg puro, queries parametrizadas) → schemas (Zod) → controllers → routes`. Sessão finalizada em transação (`services/sessionFinishService.ts`); PRs e streak em serviços testados (Vitest).
+- O `migrate()` roda no startup (DDL idempotente). O catálogo de exercícios é próprio (cadastrado pelo usuário); não há mais sincronização com base externa.
+- Backend em camadas: `types → models (pg puro, queries parametrizadas) → schemas (Zod) → controllers → routes`. Sessão finalizada em transação (`services/sessionFinishService.ts`).
 - Frontend React 19 + Vite; a sessão ativa vive num reducer (`utils/sessionMachine.ts`, testado) com persistência tripla: backend + snapshot em `localStorage` + reconciliação no boot.
 
 ## Endpoints principais
@@ -34,12 +33,11 @@ Browser → Caddy (proxy central, TLS) → Express (server :3333, serve SPA + AP
 | `GET/POST/PUT/DELETE` | `/api/measurements` | medições corporais (+ `/api/stats/body`) |
 | `GET/POST/PATCH/DELETE` | `/api/goals` | metas (1 ativa por vez) |
 | `GET/POST/DELETE` | `/api/photos` | fotos de progresso (multer) |
-| `CRUD` | `/api/exercises` | catálogo local (+ `/import`, `/:id/image`, `/:id/last-performance`, `/:id/history`) |
-| `GET/POST` | `/api/catalog/exercises` · `/api/catalog/sync` | busca na base externa / sync |
-| `CRUD` | `/api/splits` | divisões (+ `/:id/exercises` replace atômico, `/reorder`) |
+| `CRUD` | `/api/exercises` | catálogo próprio (+ `/:id/image`, `/:id/last-performance`, `/:id/history`) |
+| `CRUD` | `/api/splits` | treinos (+ `/:id/exercises` replace atômico, `/:id/exercises/:sxId` séries/reps/carga, `/reorder`) |
 | `GET/POST` | `/api/sessions` (+ `/active`, `/:id/finish`) | sessões de treino |
 | `PUT/DELETE` | `/api/session-sets/:id` · `/api/session-exercises/:id` | séries e exercícios da sessão |
-| `GET` | `/api/stats/{body,volume,gamification}` | gráficos e gamificação |
+| `GET` | `/api/stats/{body,volume}` | gráficos |
 
 ## Rodando local
 

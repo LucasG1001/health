@@ -45,6 +45,14 @@ export function WorkoutHomePage() {
             <button
               type="button"
               className={styles.iconButton}
+              onClick={() => navigate("/treino/exercicios")}
+              aria-label="Exercícios"
+            >
+              <DumbbellIcon className={styles.iconButtonIcon} />
+            </button>
+            <button
+              type="button"
+              className={styles.iconButton}
               onClick={() => navigate("/treino/historico")}
               aria-label="Histórico"
             >

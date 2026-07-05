@@ -114,6 +114,10 @@ export async function migrate(): Promise<void> {
   `);
 
   await pool.query(`
+    ALTER TABLE exercises ADD COLUMN IF NOT EXISTS video_url TEXT;
+  `);
+
+  await pool.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS exercises_external_idx ON exercises (external_id)
       WHERE external_id IS NOT NULL;
   `);

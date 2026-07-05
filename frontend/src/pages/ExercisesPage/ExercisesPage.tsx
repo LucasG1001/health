@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Outlet, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { EmptyState } from "../../components/EmptyState/EmptyState";
 import { DumbbellIcon, PlusIcon } from "../../components/Icon/icons";
@@ -10,7 +10,7 @@ import styles from "./ExercisesPage.module.css";
 
 export function ExercisesPage() {
   const navigate = useNavigate();
-  const { exercises, loading, error, reload } = useExercises();
+  const { exercises, loading, error } = useExercises();
   const [query, setQuery] = useState("");
   const [group, setGroup] = useState<MuscleGroup | "all">("all");
 
@@ -37,10 +37,10 @@ export function ExercisesPage() {
           <button
             type="button"
             className={styles.primaryButton}
-            onClick={() => navigate("/treino/exercicios/buscar")}
+            onClick={() => navigate("/treino/exercicios/novo")}
           >
             <PlusIcon className={styles.primaryButtonIcon} />
-            Adicionar
+            Novo
           </button>
         }
       />
@@ -81,16 +81,11 @@ export function ExercisesPage() {
         <EmptyState
           icon={<DumbbellIcon />}
           title="Catálogo vazio"
-          description="Busque exercícios na base ExerciseDB e adicione os que você faz, ou crie manualmente."
+          description="Cadastre seus exercícios com imagem, vídeo e instruções de execução."
           action={
-            <div className={styles.emptyActions}>
-              <button type="button" className={styles.primaryButton} onClick={() => navigate("/treino/exercicios/buscar")}>
-                Buscar exercícios
-              </button>
-              <button type="button" className={styles.ghostButton} onClick={() => navigate("/treino/exercicios/novo")}>
-                Criar manualmente
-              </button>
-            </div>
+            <button type="button" className={styles.primaryButton} onClick={() => navigate("/treino/exercicios/novo")}>
+              Cadastrar exercício
+            </button>
           }
         />
       )}
@@ -120,14 +115,6 @@ export function ExercisesPage() {
           </button>
         ))}
       </div>
-
-      {exercises.length > 0 && (
-        <button type="button" className={styles.manualLink} onClick={() => navigate("/treino/exercicios/novo")}>
-          + Criar exercício manualmente
-        </button>
-      )}
-
-      <Outlet context={{ reload }} />
     </div>
   );
 }

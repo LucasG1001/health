@@ -4,7 +4,6 @@ import {
   getAll,
   getById,
   create,
-  importFromCatalog,
   update,
   remove,
   uploadImage,
@@ -18,7 +17,6 @@ const uploader = createUploader("exercises", { allowGif: true });
 
 router.get("/", getAll);
 router.post("/", create);
-router.post("/import", importFromCatalog);
 router.get("/:id", getById);
 router.put("/:id", update);
 router.delete("/:id", remove);

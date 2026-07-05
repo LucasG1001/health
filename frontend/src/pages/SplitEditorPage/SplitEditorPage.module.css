@@ -82,8 +82,8 @@
 }
 
 .thumb {
-  width: 56px;
-  height: 56px;
+  width: 112px;
+  height: 112px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -118,9 +118,7 @@
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-semibold);
   color: var(--color-text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .meta {

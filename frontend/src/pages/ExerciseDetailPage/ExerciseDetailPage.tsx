@@ -4,7 +4,8 @@ import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { ConfirmDialog } from "../../components/ConfirmDialog/ConfirmDialog";
 import { MetricLineChart } from "../../components/MetricLineChart/MetricLineChart";
 import { PeriodFilter } from "../../components/PeriodFilter/PeriodFilter";
-import { TrashIcon } from "../../components/Icon/icons";
+import { YouTubeEmbed } from "../../components/YouTubeEmbed/YouTubeEmbed";
+import { PencilIcon, TrashIcon } from "../../components/Icon/icons";
 import {
   deleteExercise,
   fetchExercise,
@@ -95,14 +96,24 @@ export function ExerciseDetailPage() {
         subtitle={exercise ? `${MUSCLE_GROUP_LABELS[exercise.muscleGroup]}${exercise.equipment ? ` · ${exercise.equipment}` : ""}` : undefined}
         backTo="/treino/exercicios"
         actions={
-          <button
-            type="button"
-            className={styles.deleteButton}
-            onClick={() => setDeleting(true)}
-            aria-label="Excluir exercício"
-          >
-            <TrashIcon className={styles.deleteIcon} />
-          </button>
+          <>
+            <button
+              type="button"
+              className={styles.deleteButton}
+              onClick={() => navigate(`/treino/exercicios/${id}/editar`)}
+              aria-label="Editar exercício"
+            >
+              <PencilIcon className={styles.deleteIcon} />
+            </button>
+            <button
+              type="button"
+              className={styles.deleteButton}
+              onClick={() => setDeleting(true)}
+              aria-label="Excluir exercício"
+            >
+              <TrashIcon className={styles.deleteIcon} />
+            </button>
+          </>
         }
       />
 
@@ -119,6 +130,8 @@ export function ExerciseDetailPage() {
             )}
             <input type="file" accept="image/*" hidden onChange={(e) => handleImageUpload(e.target.files?.[0] ?? null)} />
           </label>
+
+          {exercise.videoUrl && <YouTubeEmbed url={exercise.videoUrl} title={exercise.name} />}
 
           <div className={styles.settingRow}>
             <label className={styles.settingField}>

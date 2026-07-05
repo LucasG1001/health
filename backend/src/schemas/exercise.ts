@@ -20,6 +20,7 @@ const baseExercise = {
   imageUrl: z.url("URL de imagem inválida.").max(1000).nullish(),
   machineSetting: z.string().max(500).nullish(),
   notes: z.string().max(2000).nullish(),
+  videoUrl: z.url("Link de vídeo inválido.").max(1000).nullish(),
 };
 
 export const createExerciseSchema = z.object({
