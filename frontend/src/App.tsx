@@ -18,7 +18,6 @@ import { WorkoutExerciseDetailPage } from "./pages/WorkoutExerciseDetailPage/Wor
 import { ExercisesPage } from "./pages/ExercisesPage/ExercisesPage";
 import { ExerciseFormPage } from "./pages/ExerciseFormPage/ExerciseFormPage";
 import { ExerciseDetailPage } from "./pages/ExerciseDetailPage/ExerciseDetailPage";
-import { SessionPage } from "./pages/SessionPage/SessionPage";
 import { SessionSummaryPage } from "./pages/SessionSummaryPage/SessionSummaryPage";
 import { HistoryPage } from "./pages/HistoryPage/HistoryPage";
 import { SessionDetailPage } from "./pages/SessionDetailPage/SessionDetailPage";
@@ -83,7 +82,6 @@ function App() {
     <BrowserRouter>
       <WorkoutSessionProvider>
         <Routes>
-          <Route path="/treino/sessao/ativa" element={<SessionPage />} />
           <Route path="*" element={<Layout />} />
         </Routes>
       </WorkoutSessionProvider>

@@ -13,12 +13,15 @@ export function ActiveSessionBar() {
   const active = state.session !== null && state.session.status === "in_progress";
   const now = useNow(active);
 
-  if (!active || location.pathname.startsWith("/treino/sessao/ativa")) return null;
+  const splitId = state.session?.splitId ?? null;
+  const workoutPath = splitId ? `/treino/divisoes/${splitId}` : "/treino";
+
+  if (!active || location.pathname === workoutPath) return null;
 
   const elapsedMs = now - new Date(state.session!.startedAt).getTime();
 
   return (
-    <button type="button" className={styles.bar} onClick={() => navigate("/treino/sessao/ativa")}>
+    <button type="button" className={styles.bar} onClick={() => navigate(workoutPath)}>
       <span className={styles.pulse} />
       <span className={styles.label}>
         Treino em andamento · {state.session!.splitName}

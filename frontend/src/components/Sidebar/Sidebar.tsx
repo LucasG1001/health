@@ -31,8 +31,8 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const handleAdd = () => {
     if (location.pathname.startsWith("/medidas")) {
       navigate("/medidas/nova");
-    } else if (sessionActive) {
-      navigate("/treino/sessao/ativa");
+    } else if (sessionActive && state.session?.splitId) {
+      navigate(`/treino/divisoes/${state.session.splitId}`);
     } else {
       navigate("/treino/divisoes/nova");
     }

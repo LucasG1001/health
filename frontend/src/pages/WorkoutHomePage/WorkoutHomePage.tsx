@@ -79,7 +79,13 @@ export function WorkoutHomePage() {
       />
 
       {sessionActive && (
-        <button type="button" className={styles.resumeCard} onClick={() => navigate("/treino/sessao/ativa")}>
+        <button
+          type="button"
+          className={styles.resumeCard}
+          onClick={() =>
+            navigate(state.session?.splitId ? `/treino/divisoes/${state.session.splitId}` : "/treino")
+          }
+        >
           <PlayIcon className={styles.resumeIcon} />
           <div className={styles.resumeInfo}>
             <span className={styles.resumeTitle}>Treino em andamento</span>

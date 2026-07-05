@@ -5,6 +5,7 @@ import { ConfirmDialog } from "../../components/ConfirmDialog/ConfirmDialog";
 import { YouTubeEmbed } from "../../components/YouTubeEmbed/YouTubeEmbed";
 import { DumbbellIcon, PencilIcon, TrashIcon } from "../../components/Icon/icons";
 import { fetchSplit, replaceSplitExercises, updateExercisePlan } from "../../services/splitService";
+import { useWorkoutSession } from "../../context/workoutSessionStore";
 import { MUSCLE_GROUP_LABELS } from "../../utils/format";
 import { apiErrorMessage } from "../../utils/apiError";
 import type { Split, SplitExercise, SplitExerciseInput } from "../../types/split";
@@ -33,6 +34,7 @@ function parsePositiveInt(raw: string): number | null {
 export function WorkoutExerciseDetailPage() {
   const { id, sxId } = useParams();
   const navigate = useNavigate();
+  const { state: sessionState, editSet } = useWorkoutSession();
 
   const [split, setSplit] = useState<Split | null>(null);
   const [loading, setLoading] = useState(true);
@@ -92,6 +94,14 @@ export function WorkoutExerciseDetailPage() {
         workingWeightKg: weightValue,
       });
       setSplit(updated);
+
+      const activeExercise = sessionState.session?.exercises.find(
+        (e) => e.exerciseId === exercise.exerciseId
+      );
+      if (activeExercise) {
+        const pending = activeExercise.sets.filter((s) => s.completedAt === null);
+        await Promise.all(pending.map((s) => editSet(s.id, { weightKg: weightValue })));
+      }
     } catch (err) {
       setError(apiErrorMessage(err, "Não foi possível salvar o exercício."));
     }
