@@ -7,6 +7,7 @@ import { ConfirmDialog } from "../../components/ConfirmDialog/ConfirmDialog";
 import {
   CheckIcon,
   ChevronLeftIcon,
+  ClockIcon,
   DumbbellIcon,
   PlayIcon,
   PlusIcon,
@@ -296,35 +297,44 @@ export function SessionPage() {
             {session.exercises.map((item, index) => {
               const done = !hasPendingSets(item);
               const completed = item.sets.filter((s) => s.completedAt !== null).length;
+              const restRef = item.sets.find((s) => s.setType === "working") ?? item.sets[0] ?? null;
               return (
-                <button
-                  key={item.id}
-                  type="button"
-                  className={styles.exerciseRow}
-                  onClick={() => handlePlay(index)}
-                >
-                  {item.imageUrl ? (
-                    <img src={item.imageUrl} alt="" className={styles.exerciseThumb} />
-                  ) : (
-                    <span className={styles.exerciseThumbFallback}>
-                      <DumbbellIcon className={styles.exerciseThumbIcon} />
-                    </span>
-                  )}
-                  <div className={styles.exerciseRowInfo}>
-                    <span className={styles.exerciseRowName}>{item.exerciseName}</span>
-                    <span className={styles.exerciseRowMeta}>
-                      {item.muscleGroup ? `${MUSCLE_GROUP_LABELS[item.muscleGroup]} · ` : ""}
-                      {completed}/{item.sets.length} séries
-                    </span>
-                  </div>
-                  <span className={`${styles.exercisePlay} ${done ? styles.exercisePlayDone : ""}`}>
-                    {done ? (
-                      <CheckIcon className={styles.exercisePlayIcon} />
+                <div key={item.id} className={styles.exerciseRow}>
+                  <div className={styles.exerciseTop}>
+                    {item.imageUrl ? (
+                      <img src={item.imageUrl} alt="" className={styles.exerciseThumb} />
                     ) : (
-                      <PlayIcon className={styles.exercisePlayIcon} />
+                      <span className={styles.exerciseThumbFallback}>
+                        <DumbbellIcon className={styles.exerciseThumbIcon} />
+                      </span>
                     )}
-                  </span>
-                </button>
+                    <div className={styles.exerciseRowInfo}>
+                      <span className={styles.exerciseRowName}>{item.exerciseName}</span>
+                      <span className={styles.exerciseRowMeta}>
+                        {item.muscleGroup ? `${MUSCLE_GROUP_LABELS[item.muscleGroup]} · ` : ""}
+                        {completed}/{item.sets.length} séries
+                      </span>
+                    </div>
+                  </div>
+                  <div className={styles.exerciseRestLine}>
+                    <span className={styles.restNotice}>
+                      <ClockIcon className={styles.restNoticeIcon} />
+                      {restRef ? `${formatClock(restMsFor(restRef))} · descanso entre séries` : "descanso entre séries"}
+                    </span>
+                    <button
+                      type="button"
+                      className={`${styles.exercisePlay} ${done ? styles.exercisePlayDone : ""}`}
+                      onClick={() => handlePlay(index)}
+                      aria-label={done ? "Exercício concluído — refazer" : "Iniciar exercício"}
+                    >
+                      {done ? (
+                        <CheckIcon className={styles.exercisePlayIcon} />
+                      ) : (
+                        <PlayIcon className={styles.exercisePlayIcon} />
+                      )}
+                    </button>
+                  </div>
+                </div>
               );
             })}
           </div>

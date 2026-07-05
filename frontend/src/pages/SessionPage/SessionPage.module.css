@@ -157,8 +157,8 @@
 
 .exerciseRow {
   display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
+  flex-direction: column;
+  gap: var(--spacing-sm);
   padding: var(--spacing-md);
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border-subtle);
@@ -171,9 +171,15 @@
   border-color: var(--color-accent);
 }
 
+.exerciseTop {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
 .exerciseThumb {
-  width: 48px;
-  height: 48px;
+  width: 112px;
+  height: 112px;
   border-radius: var(--radius-md);
   object-fit: cover;
   flex-shrink: 0;
@@ -181,8 +187,8 @@
 }
 
 .exerciseThumbFallback {
-  width: 48px;
-  height: 48px;
+  width: 112px;
+  height: 112px;
   border-radius: var(--radius-md);
   display: flex;
   align-items: center;
@@ -216,24 +222,49 @@
   color: var(--color-text-secondary);
 }
 
+.exerciseRestLine {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  padding-top: var(--spacing-sm);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.restNotice {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.restNoticeIcon {
+  width: 15px;
+  height: 15px;
+  color: var(--color-text-tertiary);
+  flex-shrink: 0;
+}
+
 .exercisePlay {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-full);
-  background: var(--color-accent);
+  background: transparent;
   flex-shrink: 0;
+  transition: background var(--transition-fast);
 }
 
-.exercisePlayDone {
-  background: var(--color-success-subtle);
+.exercisePlay:hover {
+  background: var(--color-bg-hover);
 }
 
 .exercisePlayIcon {
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
   color: #fff;
 }
 
