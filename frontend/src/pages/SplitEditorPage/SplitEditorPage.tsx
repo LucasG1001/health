@@ -34,7 +34,7 @@ function toInput(exercise: SplitExercise): SplitExerciseInput {
 export function SplitEditorPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { state, finish, discard } = useWorkoutSession();
+  const { state, finish } = useWorkoutSession();
 
   const session = state.session;
   const inProgress = session !== null && session.status === "in_progress" && session.splitId === id;
@@ -49,7 +49,6 @@ export function SplitEditorPage() {
   const [editingInfo, setEditingInfo] = useState(false);
   const [editName, setEditName] = useState("");
   const [editWeekdays, setEditWeekdays] = useState<number[]>([]);
-  const [endMenuOpen, setEndMenuOpen] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -195,22 +194,12 @@ export function SplitEditorPage() {
   };
 
   const handleFinish = async () => {
-    setEndMenuOpen(false);
     const sessionId = session?.id;
     try {
       const { summary } = await finish();
       if (sessionId) navigate(`/treino/sessao/${sessionId}/resumo`, { replace: true, state: { summary } });
     } catch (err) {
       setError(apiErrorMessage(err, "Não foi possível finalizar o treino."));
-    }
-  };
-
-  const handleDiscard = async () => {
-    setEndMenuOpen(false);
-    try {
-      await discard();
-    } catch (err) {
-      setError(apiErrorMessage(err, "Não foi possível descartar o treino."));
     }
   };
 
@@ -237,15 +226,12 @@ export function SplitEditorPage() {
       ? session.exercises.length > 0 && session.exercises.every((ex) => !hasPendingSets(ex))
       : false;
 
-  const headerActions = inProgress ? (
-    <button type="button" className={styles.endButton} onClick={() => setEndMenuOpen(true)}>
-      Encerrar
-    </button>
-  ) : split ? (
-    <button type="button" className={styles.editButton} onClick={openEditInfo}>
-      Editar
-    </button>
-  ) : undefined;
+  const headerActions =
+    !inProgress && split ? (
+      <button type="button" className={styles.editButton} onClick={openEditInfo}>
+        Editar
+      </button>
+    ) : undefined;
 
   const planList = dragOrder ?? split?.exercises ?? [];
   const totalSets = split ? split.exercises.reduce((sum, ex) => sum + ex.plannedSets.length, 0) : 0;
@@ -366,22 +352,6 @@ export function SplitEditorPage() {
         </Modal>
       )}
 
-      {endMenuOpen && (
-        <div className={styles.endBackdrop} onClick={(e) => e.target === e.currentTarget && setEndMenuOpen(false)}>
-          <div className={styles.endSheet}>
-            <h2 className={styles.endTitle}>Encerrar treino?</h2>
-            <button type="button" className={styles.startButton} onClick={handleFinish}>
-              Finalizar treino
-            </button>
-            <button type="button" className={styles.discardButton} onClick={handleDiscard}>
-              Descartar treino
-            </button>
-            <button type="button" className={styles.cancelEndButton} onClick={() => setEndMenuOpen(false)}>
-              Continuar treinando
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

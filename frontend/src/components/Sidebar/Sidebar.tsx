@@ -1,8 +1,8 @@
-import type { ComponentType } from "react";
+import { useState, type ComponentType } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useWorkoutSession } from "../../context/workoutSessionStore";
 import styles from "./Sidebar.module.css";
-import { DumbbellIcon, GearIcon, PlayIcon, PlusIcon, RulerIcon } from "../Icon/icons";
+import { DumbbellIcon, GearIcon, PlusIcon, RulerIcon, StopIcon } from "../Icon/icons";
 
 interface NavItem {
   path: string;
@@ -25,21 +25,51 @@ interface SidebarProps {
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { state } = useWorkoutSession();
+  const { state, finish, discard } = useWorkoutSession();
   const sessionActive = state.session !== null && state.session.status === "in_progress";
+
+  const [endOpen, setEndOpen] = useState(false);
+
+  const onWorkoutArea = location.pathname.startsWith("/treino");
+  const endMode = onWorkoutArea && sessionActive;
 
   const handleAdd = () => {
     if (location.pathname.startsWith("/medidas")) {
       navigate("/medidas/nova");
-    } else if (sessionActive && state.session?.splitId) {
-      navigate(`/treino/divisoes/${state.session.splitId}`);
     } else {
       navigate("/treino/divisoes/nova");
     }
   };
 
-  const onWorkoutArea = location.pathname.startsWith("/treino");
-  const FabIcon = onWorkoutArea && sessionActive ? PlayIcon : PlusIcon;
+  const handleFab = () => {
+    if (endMode) {
+      setEndOpen(true);
+    } else {
+      handleAdd();
+    }
+  };
+
+  const handleFinish = async () => {
+    setEndOpen(false);
+    const sessionId = state.session?.id;
+    try {
+      const { summary } = await finish();
+      if (sessionId) navigate(`/treino/sessao/${sessionId}/resumo`, { replace: true, state: { summary } });
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDiscard = async () => {
+    setEndOpen(false);
+    try {
+      await discard();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const FabIcon = endMode ? StopIcon : PlusIcon;
 
   const renderBarItem = (item: NavItem) => {
     const ItemIcon = item.icon;
@@ -99,14 +129,31 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         {renderBarItem(NAV_ITEMS[0]!)}
         <button
           type="button"
-          className={`${styles.barAdd} ${sessionActive ? styles.barAddActive : ""}`}
-          onClick={handleAdd}
-          aria-label={onWorkoutArea ? (sessionActive ? "Retomar treino" : "Novo treino") : "Adicionar"}
+          className={`${styles.barAdd} ${endMode ? styles.barAddEnd : ""}`}
+          onClick={handleFab}
+          aria-label={endMode ? "Encerrar treino" : onWorkoutArea ? "Novo treino" : "Adicionar"}
         >
           <FabIcon className={styles.barAddIcon} />
         </button>
         {renderBarItem(NAV_ITEMS[1]!)}
       </nav>
+
+      {endOpen && (
+        <div className={styles.endBackdrop} onClick={(e) => e.target === e.currentTarget && setEndOpen(false)}>
+          <div className={styles.endSheet}>
+            <h2 className={styles.endTitle}>Encerrar treino?</h2>
+            <button type="button" className={styles.finalizeButton} onClick={handleFinish}>
+              Finalizar treino
+            </button>
+            <button type="button" className={styles.discardButton} onClick={handleDiscard}>
+              Descartar treino
+            </button>
+            <button type="button" className={styles.cancelButton} onClick={() => setEndOpen(false)}>
+              Continuar treinando
+            </button>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }

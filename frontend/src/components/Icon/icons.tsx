@@ -50,6 +50,14 @@ export function PlayIcon({ className }: IconProps) {
   );
 }
 
+export function StopIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <rect x="6.5" y="6.5" width="11" height="11" rx="2" />
+    </Icon>
+  );
+}
+
 export function CheckIcon({ className }: IconProps) {
   return (
     <Icon className={className}>
