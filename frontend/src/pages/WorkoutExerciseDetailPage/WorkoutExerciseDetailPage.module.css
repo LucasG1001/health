@@ -74,6 +74,15 @@
   border: 1px solid var(--color-border-subtle);
 }
 
+.statCardEditable {
+  cursor: pointer;
+  transition: border-color var(--transition-fast);
+}
+
+.statCardEditable:hover {
+  border-color: var(--color-accent);
+}
+
 .statValue {
   font-size: var(--font-size-xl);
   font-weight: var(--font-weight-bold);
@@ -83,6 +92,48 @@
 
 .statValueAccent {
   color: var(--color-text-accent);
+}
+
+.statInput {
+  width: 100%;
+  max-width: 72px;
+  padding: 2px 6px;
+  text-align: center;
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-primary);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+}
+
+.statInputAccent {
+  color: var(--color-text-accent);
+}
+
+.repsInputs {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.repsInput {
+  width: 40px;
+  padding: 2px 4px;
+  text-align: center;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-primary);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+}
+
+.repsDash {
+  color: var(--color-text-tertiary);
 }
 
 .statLabel {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { useParams } from "react-router-dom";
 import { CheckIcon, PlayIcon } from "../../components/Icon/icons";
 import { WorkoutHeader } from "../../components/WorkoutHeader/WorkoutHeader";
@@ -8,7 +8,7 @@ import { useRestTimer } from "../../hooks/useRestTimer";
 import { useAudioCue } from "../../hooks/useAudioCue";
 import { useWakeLock } from "../../hooks/useWakeLock";
 import { completedSetsCount, totalSetsCount } from "../../utils/sessionMachine";
-import { fetchSplit } from "../../services/splitService";
+import { fetchSplit, updateExercisePlan } from "../../services/splitService";
 import { MUSCLE_GROUP_LABELS, formatClock, formatKg, repsTarget } from "../../utils/format";
 import { apiErrorMessage } from "../../utils/apiError";
 import type { Split } from "../../types/split";
@@ -17,6 +17,13 @@ import styles from "./WorkoutExerciseDetailPage.module.css";
 
 const DEFAULT_REST_WARMUP = 45;
 const DEFAULT_REST_WORKING = 90;
+
+type EditField = "series" | "reps" | "carga";
+
+function parsePositiveInt(raw: string): number | null {
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
 
 export function WorkoutExerciseDetailPage() {
   const { id, sxId } = useParams();
@@ -53,6 +60,11 @@ export function WorkoutExerciseDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState<EditField | null>(null);
+  const [series, setSeries] = useState("");
+  const [repsMin, setRepsMin] = useState("");
+  const [repsMax, setRepsMax] = useState("");
+  const [weight, setWeight] = useState("");
 
   const backTo = `/treino/divisoes/${id}`;
 
@@ -61,7 +73,15 @@ export function WorkoutExerciseDetailPage() {
     let active = true;
     fetchSplit(id)
       .then((data) => {
-        if (active) setSplit(data);
+        if (!active) return;
+        setSplit(data);
+        const ex = data.exercises.find((e) => e.id === sxId);
+        if (ex) {
+          setSeries(String(ex.plannedSets.length || 3));
+          setRepsMin(String(ex.plannedSets[0]?.targetRepsMin ?? 12));
+          setRepsMax(ex.plannedSets[0]?.targetRepsMax != null ? String(ex.plannedSets[0].targetRepsMax) : "");
+          setWeight(ex.workingWeightKg != null ? String(ex.workingWeightKg).replace(".", ",") : "");
+        }
       })
       .catch((err) => {
         if (active) setError(apiErrorMessage(err, "Não foi possível carregar o exercício."));
@@ -157,6 +177,39 @@ export function WorkoutExerciseDetailPage() {
     }
   };
 
+  const canEdit = !inProgress;
+  const editingField = canEdit ? editing : null;
+
+  const startEdit = (field: EditField) => {
+    if (canEdit) setEditing(field);
+  };
+
+  const onEditKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") e.currentTarget.blur();
+  };
+
+  const saveEdit = async () => {
+    setEditing(null);
+    if (!id || !sxId || !planned) return;
+    const seriesValue = parsePositiveInt(series);
+    const minValue = parsePositiveInt(repsMin);
+    if (seriesValue === null || minValue === null) return;
+    const maxValue = repsMax.trim() === "" ? null : parsePositiveInt(repsMax);
+    const weightValue = weight.trim() === "" ? null : Number(weight.replace(",", "."));
+    if (weightValue !== null && Number.isNaN(weightValue)) return;
+    try {
+      const updated = await updateExercisePlan(id, sxId, {
+        series: seriesValue,
+        targetRepsMin: minValue,
+        targetRepsMax: maxValue,
+        workingWeightKg: weightValue,
+      });
+      setSplit(updated);
+    } catch (err) {
+      setError(apiErrorMessage(err, "Não foi possível salvar o exercício."));
+    }
+  };
+
   return (
     <div className={styles.page}>
       <WorkoutHeader
@@ -180,23 +233,94 @@ export function WorkoutExerciseDetailPage() {
           </div>
 
           <div className={styles.stats}>
-            <div className={styles.statCard}>
-              <span className={styles.statValue}>{displaySets.length}</span>
+            <div
+              className={`${styles.statCard} ${canEdit ? styles.statCardEditable : ""}`}
+              onClick={() => startEdit("series")}
+            >
+              {editingField === "series" ? (
+                <input
+                  className={styles.statInput}
+                  type="text"
+                  inputMode="numeric"
+                  value={series}
+                  autoFocus
+                  onChange={(e) => setSeries(e.target.value)}
+                  onBlur={saveEdit}
+                  onKeyDown={onEditKeyDown}
+                  aria-label="Séries"
+                />
+              ) : (
+                <span className={styles.statValue}>{displaySets.length}</span>
+              )}
               <span className={styles.statLabel}>séries</span>
             </div>
-            <div className={styles.statCard}>
-              <span className={styles.statValue}>
-                {repsTarget(
-                  planned.plannedSets[0]?.targetRepsMin ?? null,
-                  planned.plannedSets[0]?.targetRepsMax ?? null
-                )}
-              </span>
+
+            <div
+              className={`${styles.statCard} ${canEdit ? styles.statCardEditable : ""}`}
+              onClick={() => startEdit("reps")}
+            >
+              {editingField === "reps" ? (
+                <div
+                  className={styles.repsInputs}
+                  onBlur={(e) => {
+                    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) saveEdit();
+                  }}
+                >
+                  <input
+                    className={styles.repsInput}
+                    type="text"
+                    inputMode="numeric"
+                    value={repsMin}
+                    autoFocus
+                    onChange={(e) => setRepsMin(e.target.value)}
+                    onKeyDown={onEditKeyDown}
+                    aria-label="Reps mínimas"
+                  />
+                  <span className={styles.repsDash}>-</span>
+                  <input
+                    className={styles.repsInput}
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="máx"
+                    value={repsMax}
+                    onChange={(e) => setRepsMax(e.target.value)}
+                    onKeyDown={onEditKeyDown}
+                    aria-label="Reps máximas"
+                  />
+                </div>
+              ) : (
+                <span className={styles.statValue}>
+                  {repsTarget(
+                    planned.plannedSets[0]?.targetRepsMin ?? null,
+                    planned.plannedSets[0]?.targetRepsMax ?? null
+                  )}
+                </span>
+              )}
               <span className={styles.statLabel}>reps</span>
             </div>
-            <div className={styles.statCard}>
-              <span className={`${styles.statValue} ${styles.statValueAccent}`}>
-                {formatKg(planned.workingWeightKg)}
-              </span>
+
+            <div
+              className={`${styles.statCard} ${canEdit ? styles.statCardEditable : ""}`}
+              onClick={() => startEdit("carga")}
+            >
+              {editingField === "carga" ? (
+                <input
+                  className={`${styles.statInput} ${styles.statInputAccent}`}
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="—"
+                  value={weight}
+                  autoFocus
+                  onChange={(e) => setWeight(e.target.value)}
+                  onBlur={saveEdit}
+                  onKeyDown={onEditKeyDown}
+                  aria-label="Carga em kg"
+                />
+              ) : (
+                <span className={`${styles.statValue} ${styles.statValueAccent}`}>
+                  {formatKg(planned.workingWeightKg)}
+                </span>
+              )}
               <span className={styles.statLabel}>carga</span>
             </div>
           </div>
