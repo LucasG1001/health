@@ -1,70 +1,67 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { PageHeader } from "../../components/PageHeader/PageHeader";
-import { ConfirmDialog } from "../../components/ConfirmDialog/ConfirmDialog";
-import { YouTubeEmbed } from "../../components/YouTubeEmbed/YouTubeEmbed";
-import { DumbbellIcon, PencilIcon, TrashIcon } from "../../components/Icon/icons";
-import { fetchSplit, replaceSplitExercises, updateExercisePlan } from "../../services/splitService";
+import { CheckIcon, ChevronLeftIcon, PlayIcon } from "../../components/Icon/icons";
 import { useWorkoutSession } from "../../context/workoutSessionStore";
-import { MUSCLE_GROUP_LABELS } from "../../utils/format";
+import { useSettings } from "../../hooks/useSettings";
+import { useRestTimer } from "../../hooks/useRestTimer";
+import { useAudioCue } from "../../hooks/useAudioCue";
+import { useWakeLock } from "../../hooks/useWakeLock";
+import { completedSetsCount, totalSetsCount } from "../../utils/sessionMachine";
+import { fetchSplit } from "../../services/splitService";
+import { MUSCLE_GROUP_LABELS, formatClock, formatKg, repsTarget } from "../../utils/format";
 import { apiErrorMessage } from "../../utils/apiError";
-import type { Split, SplitExercise, SplitExerciseInput } from "../../types/split";
+import type { Split } from "../../types/split";
+import type { SessionSet } from "../../types/session";
 import styles from "./WorkoutExerciseDetailPage.module.css";
 
-function toInput(exercise: SplitExercise): SplitExerciseInput {
-  return {
-    exerciseId: exercise.exerciseId,
-    notes: exercise.notes,
-    workingWeightKg: exercise.workingWeightKg,
-    plannedSets:
-      exercise.plannedSets.length > 0
-        ? exercise.plannedSets.map((set) => ({
-            targetRepsMin: set.targetRepsMin,
-            targetRepsMax: set.targetRepsMax,
-          }))
-        : [{ targetRepsMin: 12 }],
-  };
-}
-
-function parsePositiveInt(raw: string): number | null {
-  const parsed = Number(raw);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
-}
+const DEFAULT_REST_WARMUP = 45;
+const DEFAULT_REST_WORKING = 90;
 
 export function WorkoutExerciseDetailPage() {
   const { id, sxId } = useParams();
   const navigate = useNavigate();
-  const { state: sessionState, editSet } = useWorkoutSession();
+  const { settings } = useSettings();
+  const { state, start, playExercise, completeSet, skipRest, extendRest, restEnded, prepareCued } =
+    useWorkoutSession();
+
+  const session = state.session;
+  const inProgress = session !== null && session.status === "in_progress" && session.splitId === id;
+
+  const { unlock, cuePrepare, cueGo } = useAudioCue({
+    soundEnabled: settings?.soundEnabled ?? true,
+    vibrationEnabled: settings?.vibrationEnabled ?? true,
+  });
+  useWakeLock((settings?.wakeLockEnabled ?? true) && inProgress);
+
+  const { remainingMs, preparing } = useRestTimer({
+    endsAt: inProgress && state.phase === "resting" ? state.restEndsAt : null,
+    totalMs: state.restTotalMs,
+    onPrepare: () => {
+      if (!state.prepareCued) {
+        cuePrepare();
+        prepareCued();
+      }
+    },
+    onEnd: () => {
+      cueGo();
+      restEnded();
+    },
+  });
 
   const [split, setSplit] = useState<Split | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [removing, setRemoving] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  const [series, setSeries] = useState("");
-  const [repsMin, setRepsMin] = useState("");
-  const [repsMax, setRepsMax] = useState("");
-  const [weight, setWeight] = useState("");
-
-  const exercise = split?.exercises.find((e) => e.id === sxId) ?? null;
   const backTo = `/treino/divisoes/${id}`;
-
-  const hydrate = (ex: SplitExercise) => {
-    setSeries(String(ex.plannedSets.length || 3));
-    setRepsMin(String(ex.plannedSets[0]?.targetRepsMin ?? 12));
-    setRepsMax(ex.plannedSets[0]?.targetRepsMax != null ? String(ex.plannedSets[0].targetRepsMax) : "");
-    setWeight(ex.workingWeightKg != null ? String(ex.workingWeightKg).replace(".", ",") : "");
-  };
 
   useEffect(() => {
     if (!id || !sxId) return;
     let active = true;
     fetchSplit(id)
       .then((data) => {
-        if (!active) return;
-        setSplit(data);
-        const ex = data.exercises.find((e) => e.id === sxId);
-        if (ex) hydrate(ex);
+        if (active) setSplit(data);
       })
       .catch((err) => {
         if (active) setError(apiErrorMessage(err, "Não foi possível carregar o exercício."));
@@ -77,161 +74,198 @@ export function WorkoutExerciseDetailPage() {
     };
   }, [id, sxId]);
 
-  const save = async () => {
-    if (!id || !sxId || !exercise) return;
-    const seriesValue = parsePositiveInt(series);
-    const minValue = parsePositiveInt(repsMin);
-    if (seriesValue === null || minValue === null) return;
-    const maxValue = repsMax.trim() === "" ? null : parsePositiveInt(repsMax);
-    const weightValue = weight.trim() === "" ? null : Number(weight.replace(",", "."));
-    if (weightValue !== null && Number.isNaN(weightValue)) return;
+  const planned = split?.exercises.find((e) => e.id === sxId) ?? null;
+  const exerciseIndex = split ? split.exercises.findIndex((e) => e.id === sxId) : -1;
+  const sessionIndex =
+    inProgress && session && planned
+      ? session.exercises.findIndex((e) => e.exerciseId === planned.exerciseId)
+      : -1;
+  const sessionExercise = sessionIndex >= 0 ? session!.exercises[sessionIndex]! : null;
 
+  const displaySets = useMemo(() => {
+    if (sessionExercise) {
+      return sessionExercise.sets.map((s) => ({
+        id: s.id,
+        repsLabel: repsTarget(s.targetRepsMin, s.targetRepsMax),
+        weightKg: s.weightKg ?? planned?.workingWeightKg ?? null,
+        completed: s.completedAt !== null,
+        raw: s,
+      }));
+    }
+    if (planned) {
+      return planned.plannedSets.map((p) => ({
+        id: p.id,
+        repsLabel: repsTarget(p.targetRepsMin, p.targetRepsMax),
+        weightKg: planned.workingWeightKg,
+        completed: false,
+        raw: null as SessionSet | null,
+      }));
+    }
+    return [];
+  }, [sessionExercise, planned]);
+
+  const firstPendingId = sessionExercise
+    ? sessionExercise.sets.find((s) => s.completedAt === null)?.id ?? null
+    : null;
+  const restingHere = inProgress && sessionIndex === state.currentExerciseIndex && state.phase === "resting";
+  const canMark = inProgress && !restingHere;
+
+  const percent =
+    inProgress && session ? Math.round((completedSetsCount(session) / Math.max(1, totalSetsCount(session))) * 100) : 0;
+
+  const restMsFor = (target: SessionSet): number => {
+    const seconds =
+      target.restSeconds ??
+      (target.setType === "warmup"
+        ? settings?.restWarmupSeconds ?? DEFAULT_REST_WARMUP
+        : settings?.restWorkingSeconds ?? DEFAULT_REST_WORKING);
+    return seconds * 1000;
+  };
+
+  const handleStart = async () => {
+    if (!id || starting) return;
+    unlock();
+    setStarting(true);
+    setError(null);
     try {
-      const updated = await updateExercisePlan(id, sxId, {
-        series: seriesValue,
-        targetRepsMin: minValue,
-        targetRepsMax: maxValue,
-        workingWeightKg: weightValue,
-      });
-      setSplit(updated);
-
-      const activeExercise = sessionState.session?.exercises.find(
-        (e) => e.exerciseId === exercise.exerciseId
-      );
-      if (activeExercise) {
-        const pending = activeExercise.sets.filter((s) => s.completedAt === null);
-        await Promise.all(pending.map((s) => editSet(s.id, { weightKg: weightValue })));
-      }
+      await start(id);
+      if (exerciseIndex >= 0) playExercise(exerciseIndex);
     } catch (err) {
-      setError(apiErrorMessage(err, "Não foi possível salvar o exercício."));
+      setError(apiErrorMessage(err, "Não foi possível iniciar o treino."));
+    } finally {
+      setStarting(false);
     }
   };
 
-  const remove = async () => {
-    if (!id || !sxId || !split) return;
+  const handleMarkSet = async (set: SessionSet) => {
+    if (saving || !canMark) return;
+    unlock();
+    if (sessionIndex >= 0 && sessionIndex !== state.currentExerciseIndex) playExercise(sessionIndex);
+    setSaving(true);
+    setError(null);
     try {
-      await replaceSplitExercises(id, split.exercises.filter((e) => e.id !== sxId).map(toInput));
-      navigate(backTo);
+      await completeSet({
+        setId: set.id,
+        weightKg: set.weightKg ?? planned?.workingWeightKg ?? null,
+        reps: set.reps ?? set.targetRepsMin ?? 1,
+        restMs: restMsFor(set),
+      });
     } catch (err) {
-      setError(apiErrorMessage(err, "Não foi possível remover o exercício."));
-      setRemoving(false);
+      setError(apiErrorMessage(err, "Não foi possível salvar a série."));
+    } finally {
+      setSaving(false);
     }
   };
 
   return (
     <div className={styles.page}>
-      <PageHeader
-        title={exercise?.name ?? "Exercício"}
-        subtitle={exercise ? MUSCLE_GROUP_LABELS[exercise.muscleGroup] : undefined}
-        backTo={backTo}
-        actions={
-          exercise && (
-            <button
-              type="button"
-              className={styles.deleteButton}
-              onClick={() => setRemoving(true)}
-              aria-label="Remover exercício"
-            >
-              <TrashIcon className={styles.deleteIcon} />
-            </button>
-          )
-        }
-      />
+      <header className={styles.topBar}>
+        <button type="button" className={styles.iconBtn} onClick={() => navigate(backTo)} aria-label="Voltar">
+          <ChevronLeftIcon className={styles.navIcon} />
+        </button>
+        <div className={styles.topTitles}>
+          <span className={styles.workoutName}>{split?.name ?? "Treino"}</span>
+          {split && exerciseIndex >= 0 && (
+            <span className={styles.exerciseCounter}>
+              Exercício {exerciseIndex + 1} de {split.exercises.length}
+            </span>
+          )}
+        </div>
+        <span className={styles.percentBadge}>{percent}%</span>
+      </header>
+      <div className={styles.progressTrack}>
+        <div className={styles.progressFill} style={{ width: `${percent}%` }} />
+      </div>
 
       {error && <div className={styles.error}>{error}</div>}
       {loading && <p className={styles.loading}>Carregando…</p>}
-      {!loading && !exercise && <p className={styles.loading}>Exercício não encontrado.</p>}
+      {!loading && !planned && <p className={styles.loading}>Exercício não encontrado.</p>}
 
-      {exercise && (
+      {planned && (
         <>
-          {exercise.videoUrl ? (
-            <YouTubeEmbed url={exercise.videoUrl} title={exercise.name} />
-          ) : (
-            <div className={styles.imageCard}>
-              {exercise.imageUrl ? (
-                <img src={exercise.imageUrl} alt={exercise.name} />
-              ) : (
-                <span className={styles.imagePlaceholder}>
-                  <DumbbellIcon className={styles.placeholderIcon} />
-                </span>
-              )}
-            </div>
-          )}
-
-          <div className={styles.editGrid}>
-            <div className={styles.editField}>
-              <span className={styles.editLabel}>Séries e Repetições</span>
-              <div className={styles.editInputs}>
-                <input
-                  className={styles.numInput}
-                  type="text"
-                  inputMode="numeric"
-                  value={series}
-                  onChange={(e) => setSeries(e.target.value)}
-                  onBlur={save}
-                  aria-label="Séries"
-                />
-                <span className={styles.sep}>x</span>
-                <input
-                  className={styles.numInput}
-                  type="text"
-                  inputMode="numeric"
-                  value={repsMin}
-                  onChange={(e) => setRepsMin(e.target.value)}
-                  onBlur={save}
-                  aria-label="Repetições mínimas"
-                />
-                <span className={styles.sep}>a</span>
-                <input
-                  className={styles.numInput}
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="máx"
-                  value={repsMax}
-                  onChange={(e) => setRepsMax(e.target.value)}
-                  onBlur={save}
-                  aria-label="Repetições máximas"
-                />
-                <PencilIcon className={styles.pencil} />
-              </div>
-            </div>
-
-            <div className={styles.editField}>
-              <span className={styles.editLabel}>Carga (kg)</span>
-              <div className={styles.editInputs}>
-                <input
-                  className={styles.weightInput}
-                  type="text"
-                  inputMode="decimal"
-                  placeholder="—"
-                  value={weight}
-                  onChange={(e) => setWeight(e.target.value)}
-                  onBlur={save}
-                  aria-label="Carga em kg"
-                />
-                <PencilIcon className={styles.pencil} />
-              </div>
+          <div className={styles.hero}>
+            <div className={styles.heroOverlay}>
+              <h1 className={styles.heroName}>{planned.name}</h1>
+              <span className={styles.heroMuscle}>{MUSCLE_GROUP_LABELS[planned.muscleGroup]}</span>
             </div>
           </div>
 
-          {exercise.instructions && (
-            <section className={styles.instructionsSection}>
-              <h2 className={styles.instructionsTitle}>Como executar</h2>
-              <p className={styles.instructions}>{exercise.instructions}</p>
-            </section>
-          )}
-        </>
-      )}
+          <div className={styles.stats}>
+            <div className={styles.statCard}>
+              <span className={styles.statValue}>{displaySets.length}</span>
+              <span className={styles.statLabel}>séries</span>
+            </div>
+            <div className={styles.statCard}>
+              <span className={styles.statValue}>
+                {repsTarget(
+                  planned.plannedSets[0]?.targetRepsMin ?? null,
+                  planned.plannedSets[0]?.targetRepsMax ?? null
+                )}
+              </span>
+              <span className={styles.statLabel}>reps</span>
+            </div>
+            <div className={styles.statCard}>
+              <span className={`${styles.statValue} ${styles.statValueAccent}`}>
+                {formatKg(planned.workingWeightKg)}
+              </span>
+              <span className={styles.statLabel}>carga</span>
+            </div>
+          </div>
 
-      {removing && (
-        <ConfirmDialog
-          title="Remover exercício"
-          message="O exercício sai deste treino. Treinos já realizados são preservados."
-          confirmLabel="Remover"
-          danger
-          onCancel={() => setRemoving(false)}
-          onConfirm={remove}
-        />
+          <div>
+            <span className={styles.sectionLabel}>Marque suas séries</span>
+            <div className={styles.setList}>
+              {displaySets.map((s, index) => {
+                const isNext = inProgress && s.raw !== null && s.id === firstPendingId;
+                const actionable = isNext && canMark;
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    className={`${styles.setRow} ${s.completed ? styles.setRowChecked : ""} ${
+                      actionable ? styles.setRowActionable : ""
+                    }`}
+                    onClick={() => actionable && s.raw && handleMarkSet(s.raw)}
+                    disabled={!actionable}
+                  >
+                    <span className={`${styles.checkCircle} ${s.completed ? styles.checkCircleChecked : ""}`}>
+                      {s.completed && <CheckIcon className={styles.checkIcon} />}
+                    </span>
+                    <span className={styles.setName}>Série {index + 1}</span>
+                    <span className={styles.setMeta}>
+                      {s.repsLabel} reps · {formatKg(s.weightKg)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {restingHere && (
+            <div className={styles.restBar}>
+              <span className={styles.restTime}>{preparing ? "prepare!" : formatClock(remainingMs)}</span>
+              <span className={styles.restLabel}>Descanso</span>
+              <button type="button" className={styles.restChip} onClick={extendRest}>
+                +15s
+              </button>
+              <button type="button" className={styles.restChipPrimary} onClick={skipRest}>
+                Pular
+              </button>
+            </div>
+          )}
+
+          <div className={styles.bottomBar}>
+            <button type="button" className={styles.iconBtn} onClick={() => navigate(backTo)} aria-label="Voltar">
+              <ChevronLeftIcon className={styles.navIcon} />
+            </button>
+            {!inProgress && (
+              <button type="button" className={styles.primaryBtn} onClick={handleStart} disabled={starting}>
+                Iniciar Treino
+                <PlayIcon className={styles.primaryIcon} />
+              </button>
+            )}
+          </div>
+        </>
       )}
     </div>
   );

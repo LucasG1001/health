@@ -4,34 +4,16 @@ import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { EmptyState } from "../../components/EmptyState/EmptyState";
 import { Modal } from "../../components/Modal/Modal";
 import { DayOfWeekPicker } from "../../components/DayOfWeekPicker/DayOfWeekPicker";
-import {
-  CheckIcon,
-  ChevronRightIcon,
-  ClockIcon,
-  CloseIcon,
-  DumbbellIcon,
-  PencilIcon,
-  PlayIcon,
-  PlusIcon,
-  SkipIcon,
-} from "../../components/Icon/icons";
+import { CloseIcon, DumbbellIcon, PlusIcon } from "../../components/Icon/icons";
 import { useExercises } from "../../hooks/useExercises";
 import { useWorkoutSession } from "../../context/workoutSessionStore";
-import { useSettings } from "../../hooks/useSettings";
-import { useNow } from "../../hooks/useNow";
-import { useRestTimer } from "../../hooks/useRestTimer";
-import { useAudioCue } from "../../hooks/useAudioCue";
-import { useWakeLock } from "../../hooks/useWakeLock";
-import { currentSet, firstPendingSetIndex, hasPendingSets } from "../../utils/sessionMachine";
+import { hasPendingSets } from "../../utils/sessionMachine";
 import { createSplit, fetchSplit, replaceSplitExercises, updateSplit } from "../../services/splitService";
-import { MUSCLE_GROUP_LABELS, formatClock, formatKg, repsTarget } from "../../utils/format";
+import { MUSCLE_GROUP_LABELS, formatKg, repsTarget } from "../../utils/format";
 import { apiErrorMessage } from "../../utils/apiError";
 import type { Split, SplitExercise, SplitExerciseInput } from "../../types/split";
-import type { SessionSet } from "../../types/session";
 import styles from "./SplitEditorPage.module.css";
 
-const DEFAULT_REST_WARMUP = 45;
-const DEFAULT_REST_WORKING = 90;
 const LONG_PRESS_MS = 500;
 
 function toInput(exercise: SplitExercise): SplitExerciseInput {
@@ -53,50 +35,15 @@ export function SplitEditorPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { exercises: catalog } = useExercises();
-  const { settings } = useSettings();
-  const {
-    state,
-    start,
-    completeSet,
-    playExercise,
-    skipRest,
-    extendRest,
-    restEnded,
-    prepareCued,
-    finish,
-    discard,
-  } = useWorkoutSession();
+  const { state, finish, discard } = useWorkoutSession();
 
   const session = state.session;
   const inProgress = session !== null && session.status === "in_progress" && session.splitId === id;
-
-  const { unlock, cuePrepare, cueGo } = useAudioCue({
-    soundEnabled: settings?.soundEnabled ?? true,
-    vibrationEnabled: settings?.vibrationEnabled ?? true,
-  });
-  useWakeLock((settings?.wakeLockEnabled ?? true) && inProgress);
-
-  const { remainingMs, preparing } = useRestTimer({
-    endsAt: inProgress && state.phase === "resting" ? state.restEndsAt : null,
-    totalMs: state.restTotalMs,
-    onPrepare: () => {
-      if (!state.prepareCued) {
-        cuePrepare();
-        prepareCued();
-      }
-    },
-    onEnd: () => {
-      cueGo();
-      restEnded();
-    },
-  });
-  const now = useNow(inProgress);
 
   const [split, setSplit] = useState<Split | null>(null);
   const [loading, setLoading] = useState(Boolean(id));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [starting, setStarting] = useState(false);
 
   const [name, setName] = useState("");
   const [weekdays, setWeekdays] = useState<number[]>([]);
@@ -105,16 +52,7 @@ export function SplitEditorPage() {
   const [editWeekdays, setEditWeekdays] = useState<number[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerQuery, setPickerQuery] = useState("");
-
-  const [armed, setArmed] = useState(() => (id ? sessionStorage.getItem(`health.armed.${id}`) === "1" : false));
   const [endMenuOpen, setEndMenuOpen] = useState(false);
-
-  const setArmedPersist = (value: boolean) => {
-    setArmed(value);
-    if (!id) return;
-    if (value) sessionStorage.setItem(`health.armed.${id}`, "1");
-    else sessionStorage.removeItem(`health.armed.${id}`);
-  };
 
   useEffect(() => {
     if (!id) return;
@@ -144,7 +82,7 @@ export function SplitEditorPage() {
     );
   }, [catalog, split, pickerQuery]);
 
-  // ---- reorder by long-press + drag (idle only) ----
+  // ---- reorder by long-press + drag (fora da sessão) ----
   const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
   const pressTimer = useRef<number | null>(null);
   const pressStartY = useRef(0);
@@ -256,17 +194,6 @@ export function SplitEditorPage() {
     );
   }
 
-  const restMsFor = (target: SessionSet): number => {
-    const seconds =
-      target.restSeconds ??
-      (target.setType === "warmup"
-        ? settings?.restWarmupSeconds ?? DEFAULT_REST_WARMUP
-        : settings?.restWorkingSeconds ?? DEFAULT_REST_WORKING);
-    return seconds * 1000;
-  };
-
-  const defaultRestClock = formatClock((settings?.restWorkingSeconds ?? DEFAULT_REST_WORKING) * 1000);
-
   const persist = async (inputs: SplitExerciseInput[]): Promise<void> => {
     setSaving(true);
     setError(null);
@@ -290,65 +217,11 @@ export function SplitEditorPage() {
     ]);
   };
 
-  const sxIdForExercise = (exerciseId: string | null): string | null => {
-    if (!exerciseId || !split) return null;
-    return split.exercises.find((e) => e.exerciseId === exerciseId)?.id ?? null;
-  };
-
-  const openDetailByExerciseId = (exerciseId: string | null) => {
-    const sxId = sxIdForExercise(exerciseId);
-    if (sxId) navigate(`/treino/divisoes/${id}/ex/${sxId}`);
-    else if (exerciseId) navigate(`/treino/exercicios/${exerciseId}`);
-  };
-
-  const onFirstPlay = async (index: number) => {
-    if (starting) return;
-    unlock();
-    setStarting(true);
-    setError(null);
-    try {
-      await start(id);
-      setArmedPersist(false);
-      playExercise(index);
-    } catch (err) {
-      setError(apiErrorMessage(err, "Não foi possível iniciar o treino."));
-    } finally {
-      setStarting(false);
-    }
-  };
-
-  const handlePlay = (index: number) => {
-    unlock();
-    setError(null);
-    playExercise(index);
-  };
-
-  const handleDone = async () => {
-    const set = currentSet(state);
-    if (!set || saving) return;
-    unlock();
-    setSaving(true);
-    setError(null);
-    try {
-      await completeSet({
-        setId: set.id,
-        weightKg: set.weightKg,
-        reps: set.reps ?? set.targetRepsMin,
-        restMs: restMsFor(set),
-      });
-    } catch (err) {
-      setError(apiErrorMessage(err, "Não foi possível salvar a série."));
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const handleFinish = async () => {
     setEndMenuOpen(false);
     const sessionId = session?.id;
     try {
       const { summary } = await finish();
-      setArmedPersist(false);
       if (sessionId) navigate(`/treino/sessao/${sessionId}/resumo`, { replace: true, state: { summary } });
     } catch (err) {
       setError(apiErrorMessage(err, "Não foi possível finalizar o treino."));
@@ -359,7 +232,6 @@ export function SplitEditorPage() {
     setEndMenuOpen(false);
     try {
       await discard();
-      setArmedPersist(false);
     } catch (err) {
       setError(apiErrorMessage(err, "Não foi possível descartar o treino."));
     }
@@ -383,120 +255,60 @@ export function SplitEditorPage() {
     }
   };
 
-  const elapsedMs = inProgress && session ? now - new Date(session.startedAt).getTime() : 0;
   const allDone =
     inProgress && session
       ? session.exercises.length > 0 && session.exercises.every((ex) => !hasPendingSets(ex))
       : false;
 
   const headerActions = inProgress ? (
-    <div className={styles.headerActions}>
-      <span className={styles.headerClock}>{formatClock(elapsedMs)}</span>
-      <button type="button" className={styles.endButton} onClick={() => setEndMenuOpen(true)}>
-        Encerrar
-      </button>
-    </div>
+    <button type="button" className={styles.endButton} onClick={() => setEndMenuOpen(true)}>
+      Encerrar
+    </button>
   ) : split ? (
-    <button type="button" className={styles.iconButton} onClick={openEditInfo} aria-label="Editar treino">
-      <PencilIcon className={styles.iconButtonIcon} />
+    <button type="button" className={styles.editButton} onClick={openEditInfo}>
+      Editar
     </button>
   ) : undefined;
 
   const planList = dragOrder ?? split?.exercises ?? [];
+  const totalSets = split ? split.exercises.reduce((sum, ex) => sum + ex.plannedSets.length, 0) : 0;
+  const muscleSummary = split
+    ? Array.from(new Set(split.exercises.map((ex) => ex.muscleGroup)))
+        .map((group) => MUSCLE_GROUP_LABELS[group])
+        .join(" · ")
+    : "";
+  const estimatedMinutes = Math.max(5, totalSets * 2);
 
   return (
     <div className={styles.page}>
-      <PageHeader title={split?.name ?? "Treino"} backTo="/treino" actions={headerActions} />
+      <PageHeader title={inProgress ? split?.name ?? "Treino" : ""} backTo="/treino" actions={headerActions} />
 
       {error && <div className={styles.error}>{error}</div>}
       {loading && <p className={styles.loading}>Carregando…</p>}
 
       {split && (
         <>
-          {inProgress && session ? (
-            <div className={styles.exerciseList}>
-              {session.exercises.map((item, index) => {
-                const done = !hasPendingSets(item);
-                const completed = item.sets.filter((s) => s.completedAt !== null).length;
-                const total = item.sets.length;
-                const active = index === state.currentExerciseIndex;
-                const resting = active && state.phase === "resting";
-                const exercising = active && state.phase === "exercising";
-                const currentNumber = firstPendingSetIndex(item) + 1;
-                const restRef = item.sets.find((s) => s.setType === "working") ?? item.sets[0] ?? null;
-                return (
-                  <div key={item.id} className={`${styles.exerciseRow} ${active ? styles.exerciseRowActive : ""}`}>
-                    <button
-                      type="button"
-                      className={styles.exerciseMain}
-                      onClick={() => openDetailByExerciseId(item.exerciseId)}
-                    >
-                      <div className={styles.thumb}>
-                        {item.imageUrl ? (
-                          <img src={item.imageUrl} alt="" loading="lazy" />
-                        ) : (
-                          <DumbbellIcon className={styles.thumbIcon} />
-                        )}
-                      </div>
-                      <div className={styles.info}>
-                        <span className={styles.name}>{item.exerciseName}</span>
-                        <span className={styles.meta}>
-                          {item.muscleGroup ? `${MUSCLE_GROUP_LABELS[item.muscleGroup]} · ` : ""}
-                          {completed}/{total} séries
-                        </span>
-                      </div>
-                    </button>
-                    <div className={styles.restLine}>
-                      {done ? (
-                        <span className={styles.restNotice}>
-                          <CheckIcon className={styles.restDoneIcon} />
-                          concluído
-                        </span>
-                      ) : resting ? (
-                        <>
-                          <span className={styles.restCountdown}>
-                            <ClockIcon className={styles.restNoticeIcon} />
-                            {preparing ? "prepare!" : formatClock(remainingMs)} · próxima {currentNumber}/{total}
-                          </span>
-                          <div className={styles.restMiniActions}>
-                            <button type="button" className={styles.restMiniButton} onClick={extendRest}>
-                              <PlusIcon className={styles.restMiniIcon} />
-                              15s
-                            </button>
-                            <button type="button" className={styles.restMiniButton} onClick={skipRest}>
-                              <SkipIcon className={styles.restMiniIcon} />
-                              Pular
-                            </button>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <span className={styles.restNotice}>
-                            <ClockIcon className={styles.restNoticeIcon} />
-                            {restRef ? formatClock(restMsFor(restRef)) : defaultRestClock} · descanso · {currentNumber}/{total}
-                          </span>
-                          {exercising ? (
-                            <button type="button" className={styles.doneButton} onClick={handleDone} disabled={saving}>
-                              Feito
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              className={styles.playButton}
-                              onClick={() => handlePlay(index)}
-                              aria-label="Iniciar exercício"
-                            >
-                              <PlayIcon className={styles.playIcon} />
-                            </button>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+          <div className={styles.hero}>
+            <span className={styles.eyebrow}>Treino</span>
+            <h1 className={styles.heroTitle}>{split.name}</h1>
+            {muscleSummary && <p className={styles.heroSubtitle}>{muscleSummary}</p>}
+            <div className={styles.stats}>
+              <div className={styles.statCard}>
+                <span className={styles.statValue}>{split.exercises.length}</span>
+                <span className={styles.statLabel}>exercícios</span>
+              </div>
+              <div className={styles.statCard}>
+                <span className={styles.statValue}>{totalSets}</span>
+                <span className={styles.statLabel}>séries</span>
+              </div>
+              <div className={styles.statCard}>
+                <span className={`${styles.statValue} ${styles.statValueAccent}`}>~{estimatedMinutes} min</span>
+                <span className={styles.statLabel}>estimado</span>
+              </div>
             </div>
-          ) : planList.length > 0 ? (
+          </div>
+
+          {planList.length > 0 ? (
             <div
               className={`${styles.exerciseList} ${dragIndex !== null ? styles.listDragging : ""}`}
               onPointerMove={onRowPointerMove}
@@ -509,7 +321,7 @@ export function SplitEditorPage() {
                     rowRefs.current[index] = el;
                   }}
                   className={`${styles.exerciseRow} ${dragIndex === index ? styles.exerciseRowDragging : ""}`}
-                  onPointerDown={armed ? undefined : (e) => onRowPointerDown(e, index, planList)}
+                  onPointerDown={inProgress ? undefined : (e) => onRowPointerDown(e, index, planList)}
                 >
                   <button
                     type="button"
@@ -522,43 +334,24 @@ export function SplitEditorPage() {
                       navigate(`/treino/divisoes/${id}/ex/${exercise.id}`);
                     }}
                   >
-                    <div className={styles.thumb}>
-                      {exercise.imageUrl ? (
-                        <img src={exercise.imageUrl} alt="" loading="lazy" />
-                      ) : (
-                        <DumbbellIcon className={styles.thumbIcon} />
-                      )}
+                    <div className={styles.numBadge}>
+                      <span className={styles.numBadgeText}>{index + 1}</span>
                     </div>
                     <div className={styles.info}>
                       <span className={styles.name}>{exercise.name}</span>
-                      <span className={styles.meta}>
-                        {exercise.plannedSets.length} x{" "}
+                      <span className={styles.meta}>{MUSCLE_GROUP_LABELS[exercise.muscleGroup]}</span>
+                    </div>
+                    <div className={styles.setsInfo}>
+                      <span className={styles.setsReps}>
+                        {exercise.plannedSets.length}×
                         {repsTarget(
                           exercise.plannedSets[0]?.targetRepsMin ?? null,
                           exercise.plannedSets[0]?.targetRepsMax ?? null
-                        )}{" "}
-                        | {formatKg(exercise.workingWeightKg)}
+                        )}
                       </span>
+                      <span className={styles.weight}>{formatKg(exercise.workingWeightKg)}</span>
                     </div>
-                    {!armed && <ChevronRightIcon className={styles.chevron} />}
                   </button>
-                  {armed && (
-                    <div className={styles.restLine}>
-                      <span className={styles.restNotice}>
-                        <ClockIcon className={styles.restNoticeIcon} />
-                        {defaultRestClock} · descanso · 0/{exercise.plannedSets.length}
-                      </span>
-                      <button
-                        type="button"
-                        className={styles.playButton}
-                        onClick={() => onFirstPlay(index)}
-                        disabled={starting}
-                        aria-label="Iniciar exercício"
-                      >
-                        <PlayIcon className={styles.playIcon} />
-                      </button>
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
@@ -570,84 +363,63 @@ export function SplitEditorPage() {
             />
           )}
 
-          {!inProgress && !armed && (
-            <>
-              {pickerOpen ? (
-                <div className={styles.picker}>
-                  <div className={styles.pickerHeader}>
-                    <input
-                      type="search"
-                      placeholder="Buscar no meu catálogo…"
-                      value={pickerQuery}
-                      onChange={(e) => setPickerQuery(e.target.value)}
-                      autoFocus
-                    />
-                    <button
-                      type="button"
-                      className={styles.iconButton}
-                      onClick={() => setPickerOpen(false)}
-                      aria-label="Fechar"
-                    >
-                      <CloseIcon className={styles.iconButtonIcon} />
-                    </button>
-                  </div>
-                  <div className={styles.pickerList}>
-                    {pickerResults.map((exercise) => (
-                      <button
-                        key={exercise.id}
-                        type="button"
-                        className={styles.pickerItem}
-                        onClick={() => addExercise(exercise.id)}
-                      >
-                        <div className={styles.thumb}>
-                          {exercise.imageUrl ? (
-                            <img src={exercise.imageUrl} alt="" loading="lazy" />
-                          ) : (
-                            <DumbbellIcon className={styles.thumbIcon} />
-                          )}
-                        </div>
-                        <div className={styles.info}>
-                          <span className={styles.name}>{exercise.name}</span>
-                          <span className={styles.meta}>{MUSCLE_GROUP_LABELS[exercise.muscleGroup]}</span>
-                        </div>
-                      </button>
-                    ))}
-                    {pickerResults.length === 0 && (
-                      <p className={styles.pickerEmpty}>
-                        Nada encontrado.{" "}
-                        <button
-                          type="button"
-                          className={styles.pickerLink}
-                          onClick={() => navigate("/treino/exercicios/novo")}
-                        >
-                          Cadastrar exercício
-                        </button>
-                      </p>
-                    )}
-                  </div>
+          {!inProgress &&
+            (pickerOpen ? (
+              <div className={styles.picker}>
+                <div className={styles.pickerHeader}>
+                  <input
+                    type="search"
+                    placeholder="Buscar no meu catálogo…"
+                    value={pickerQuery}
+                    onChange={(e) => setPickerQuery(e.target.value)}
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    className={styles.iconButton}
+                    onClick={() => setPickerOpen(false)}
+                    aria-label="Fechar"
+                  >
+                    <CloseIcon className={styles.iconButtonIcon} />
+                  </button>
                 </div>
-              ) : (
-                <button type="button" className={styles.addButton} onClick={() => setPickerOpen(true)}>
-                  <PlusIcon className={styles.addIcon} />
-                  Adicionar exercício
-                </button>
-              )}
-
-              <button
-                type="button"
-                className={styles.startButton}
-                onClick={() => setArmedPersist(true)}
-                disabled={split.exercises.length === 0}
-              >
-                <PlayIcon className={styles.startIcon} />
-                Começar treino
+                <div className={styles.pickerList}>
+                  {pickerResults.map((exercise) => (
+                    <button
+                      key={exercise.id}
+                      type="button"
+                      className={styles.pickerItem}
+                      onClick={() => addExercise(exercise.id)}
+                    >
+                      <div className={styles.numBadge}>
+                        <DumbbellIcon className={styles.thumbIcon} />
+                      </div>
+                      <div className={styles.info}>
+                        <span className={styles.name}>{exercise.name}</span>
+                        <span className={styles.meta}>{MUSCLE_GROUP_LABELS[exercise.muscleGroup]}</span>
+                      </div>
+                    </button>
+                  ))}
+                  {pickerResults.length === 0 && (
+                    <p className={styles.pickerEmpty}>
+                      Nada encontrado.{" "}
+                      <button
+                        type="button"
+                        className={styles.pickerLink}
+                        onClick={() => navigate("/treino/exercicios/novo")}
+                      >
+                        Cadastrar exercício
+                      </button>
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <button type="button" className={styles.addButton} onClick={() => setPickerOpen(true)}>
+                <PlusIcon className={styles.addIcon} />
+                Adicionar exercício
               </button>
-            </>
-          )}
-
-          {armed && (
-            <p className={styles.armedHint}>Toque no Play do primeiro exercício para começar.</p>
-          )}
+            ))}
 
           {allDone && (
             <button type="button" className={styles.startButton} onClick={handleFinish}>
