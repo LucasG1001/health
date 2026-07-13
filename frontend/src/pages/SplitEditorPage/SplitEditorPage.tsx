@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
+import { WorkoutHeader } from "../../components/WorkoutHeader/WorkoutHeader";
 import { EmptyState } from "../../components/EmptyState/EmptyState";
 import { Modal } from "../../components/Modal/Modal";
 import { DayOfWeekPicker } from "../../components/DayOfWeekPicker/DayOfWeekPicker";
-import { CloseIcon, DumbbellIcon, PlusIcon } from "../../components/Icon/icons";
-import { useExercises } from "../../hooks/useExercises";
+import { DumbbellIcon } from "../../components/Icon/icons";
 import { useWorkoutSession } from "../../context/workoutSessionStore";
-import { hasPendingSets } from "../../utils/sessionMachine";
+import { completedSetsCount, hasPendingSets, totalSetsCount } from "../../utils/sessionMachine";
 import { createSplit, fetchSplit, replaceSplitExercises, updateSplit } from "../../services/splitService";
 import { MUSCLE_GROUP_LABELS, formatKg, repsTarget } from "../../utils/format";
 import { apiErrorMessage } from "../../utils/apiError";
@@ -34,7 +34,6 @@ function toInput(exercise: SplitExercise): SplitExerciseInput {
 export function SplitEditorPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { exercises: catalog } = useExercises();
   const { state, finish, discard } = useWorkoutSession();
 
   const session = state.session;
@@ -50,8 +49,6 @@ export function SplitEditorPage() {
   const [editingInfo, setEditingInfo] = useState(false);
   const [editName, setEditName] = useState("");
   const [editWeekdays, setEditWeekdays] = useState<number[]>([]);
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [pickerQuery, setPickerQuery] = useState("");
   const [endMenuOpen, setEndMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -71,16 +68,6 @@ export function SplitEditorPage() {
       active = false;
     };
   }, [id]);
-
-  const pickerResults = useMemo(() => {
-    const chosen = new Set(split?.exercises.map((exercise) => exercise.exerciseId));
-    const normalized = pickerQuery.trim().toLowerCase();
-    return catalog.filter(
-      (exercise) =>
-        !chosen.has(exercise.id) &&
-        (normalized === "" || exercise.name.toLowerCase().includes(normalized))
-    );
-  }, [catalog, split, pickerQuery]);
 
   // ---- reorder by long-press + drag (fora da sessão) ----
   const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -207,16 +194,6 @@ export function SplitEditorPage() {
     }
   };
 
-  const addExercise = async (exerciseId: string) => {
-    if (!split) return;
-    setPickerOpen(false);
-    setPickerQuery("");
-    await persist([
-      ...split.exercises.map(toInput),
-      { exerciseId, plannedSets: [{ targetRepsMin: 12 }, { targetRepsMin: 12 }, { targetRepsMin: 12 }] },
-    ]);
-  };
-
   const handleFinish = async () => {
     setEndMenuOpen(false);
     const sessionId = session?.id;
@@ -278,33 +255,38 @@ export function SplitEditorPage() {
         .join(" · ")
     : "";
   const estimatedMinutes = Math.max(5, totalSets * 2);
+  const percent =
+    inProgress && session
+      ? Math.round((completedSetsCount(session) / Math.max(1, totalSetsCount(session))) * 100)
+      : null;
 
   return (
     <div className={styles.page}>
-      <PageHeader title={inProgress ? split?.name ?? "Treino" : ""} backTo="/treino" actions={headerActions} />
+      <WorkoutHeader
+        title={split?.name ?? "Treino"}
+        subtitle={muscleSummary || undefined}
+        percent={percent}
+        backTo="/treino"
+        actions={headerActions}
+      />
 
       {error && <div className={styles.error}>{error}</div>}
       {loading && <p className={styles.loading}>Carregando…</p>}
 
       {split && (
         <>
-          <div className={styles.hero}>
-            <span className={styles.eyebrow}>Treino</span>
-            <h1 className={styles.heroTitle}>{split.name}</h1>
-            {muscleSummary && <p className={styles.heroSubtitle}>{muscleSummary}</p>}
-            <div className={styles.stats}>
-              <div className={styles.statCard}>
-                <span className={styles.statValue}>{split.exercises.length}</span>
-                <span className={styles.statLabel}>exercícios</span>
-              </div>
-              <div className={styles.statCard}>
-                <span className={styles.statValue}>{totalSets}</span>
-                <span className={styles.statLabel}>séries</span>
-              </div>
-              <div className={styles.statCard}>
-                <span className={`${styles.statValue} ${styles.statValueAccent}`}>~{estimatedMinutes} min</span>
-                <span className={styles.statLabel}>estimado</span>
-              </div>
+          <div className={styles.stats}>
+            <div className={styles.statCard}>
+              <span className={styles.statValue}>{split.exercises.length}</span>
+              <span className={styles.statLabel}>exercícios</span>
+            </div>
+            <div className={styles.statCard}>
+              <span className={styles.statValue}>{totalSets}</span>
+              <span className={styles.statLabel}>séries</span>
+            </div>
+            <div className={styles.statCard}>
+              <span className={`${styles.statValue} ${styles.statValueAccent}`}>~{estimatedMinutes} min</span>
+              <span className={styles.statLabel}>estimado</span>
             </div>
           </div>
 
@@ -362,64 +344,6 @@ export function SplitEditorPage() {
               description="Adicione exercícios a este treino."
             />
           )}
-
-          {!inProgress &&
-            (pickerOpen ? (
-              <div className={styles.picker}>
-                <div className={styles.pickerHeader}>
-                  <input
-                    type="search"
-                    placeholder="Buscar no meu catálogo…"
-                    value={pickerQuery}
-                    onChange={(e) => setPickerQuery(e.target.value)}
-                    autoFocus
-                  />
-                  <button
-                    type="button"
-                    className={styles.iconButton}
-                    onClick={() => setPickerOpen(false)}
-                    aria-label="Fechar"
-                  >
-                    <CloseIcon className={styles.iconButtonIcon} />
-                  </button>
-                </div>
-                <div className={styles.pickerList}>
-                  {pickerResults.map((exercise) => (
-                    <button
-                      key={exercise.id}
-                      type="button"
-                      className={styles.pickerItem}
-                      onClick={() => addExercise(exercise.id)}
-                    >
-                      <div className={styles.numBadge}>
-                        <DumbbellIcon className={styles.thumbIcon} />
-                      </div>
-                      <div className={styles.info}>
-                        <span className={styles.name}>{exercise.name}</span>
-                        <span className={styles.meta}>{MUSCLE_GROUP_LABELS[exercise.muscleGroup]}</span>
-                      </div>
-                    </button>
-                  ))}
-                  {pickerResults.length === 0 && (
-                    <p className={styles.pickerEmpty}>
-                      Nada encontrado.{" "}
-                      <button
-                        type="button"
-                        className={styles.pickerLink}
-                        onClick={() => navigate("/treino/exercicios/novo")}
-                      >
-                        Cadastrar exercício
-                      </button>
-                    </p>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <button type="button" className={styles.addButton} onClick={() => setPickerOpen(true)}>
-                <PlusIcon className={styles.addIcon} />
-                Adicionar exercício
-              </button>
-            ))}
 
           {allDone && (
             <button type="button" className={styles.startButton} onClick={handleFinish}>

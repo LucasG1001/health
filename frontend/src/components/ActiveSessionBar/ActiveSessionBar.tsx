@@ -15,8 +15,11 @@ export function ActiveSessionBar() {
 
   const splitId = state.session?.splitId ?? null;
   const workoutPath = splitId ? `/treino/divisoes/${splitId}` : "/treino";
+  const onWorkoutScreen =
+    location.pathname === workoutPath ||
+    (splitId !== null && location.pathname.startsWith(`/treino/divisoes/${splitId}/`));
 
-  if (!active || location.pathname === workoutPath) return null;
+  if (!active || onWorkoutScreen) return null;
 
   const elapsedMs = now - new Date(state.session!.startedAt).getTime();
 

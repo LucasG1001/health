@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { CheckIcon, ChevronLeftIcon, PlayIcon } from "../../components/Icon/icons";
+import { useParams } from "react-router-dom";
+import { CheckIcon, PlayIcon } from "../../components/Icon/icons";
+import { WorkoutHeader } from "../../components/WorkoutHeader/WorkoutHeader";
 import { useWorkoutSession } from "../../context/workoutSessionStore";
 import { useSettings } from "../../hooks/useSettings";
 import { useRestTimer } from "../../hooks/useRestTimer";
@@ -19,7 +20,6 @@ const DEFAULT_REST_WORKING = 90;
 
 export function WorkoutExerciseDetailPage() {
   const { id, sxId } = useParams();
-  const navigate = useNavigate();
   const { settings } = useSettings();
   const { state, start, playExercise, completeSet, skipRest, extendRest, restEnded, prepareCued } =
     useWorkoutSession();
@@ -159,23 +159,12 @@ export function WorkoutExerciseDetailPage() {
 
   return (
     <div className={styles.page}>
-      <header className={styles.topBar}>
-        <button type="button" className={styles.iconBtn} onClick={() => navigate(backTo)} aria-label="Voltar">
-          <ChevronLeftIcon className={styles.navIcon} />
-        </button>
-        <div className={styles.topTitles}>
-          <span className={styles.workoutName}>{split?.name ?? "Treino"}</span>
-          {split && exerciseIndex >= 0 && (
-            <span className={styles.exerciseCounter}>
-              Exercício {exerciseIndex + 1} de {split.exercises.length}
-            </span>
-          )}
-        </div>
-        <span className={styles.percentBadge}>{percent}%</span>
-      </header>
-      <div className={styles.progressTrack}>
-        <div className={styles.progressFill} style={{ width: `${percent}%` }} />
-      </div>
+      <WorkoutHeader
+        title={split?.name ?? "Treino"}
+        subtitle={split && exerciseIndex >= 0 ? `Exercício ${exerciseIndex + 1} de ${split.exercises.length}` : undefined}
+        backTo={backTo}
+        percent={percent}
+      />
 
       {error && <div className={styles.error}>{error}</div>}
       {loading && <p className={styles.loading}>Carregando…</p>}
@@ -254,17 +243,14 @@ export function WorkoutExerciseDetailPage() {
             </div>
           )}
 
-          <div className={styles.bottomBar}>
-            <button type="button" className={styles.iconBtn} onClick={() => navigate(backTo)} aria-label="Voltar">
-              <ChevronLeftIcon className={styles.navIcon} />
-            </button>
-            {!inProgress && (
+          {!inProgress && (
+            <div className={styles.bottomBar}>
               <button type="button" className={styles.primaryBtn} onClick={handleStart} disabled={starting}>
                 Iniciar Treino
                 <PlayIcon className={styles.primaryIcon} />
               </button>
-            )}
-          </div>
+            </div>
+          )}
         </>
       )}
     </div>

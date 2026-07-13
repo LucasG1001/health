@@ -30,58 +30,9 @@
   color: var(--color-text-secondary);
 }
 
-.iconButton {
-  width: 38px;
-  height: 38px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-md);
-  color: var(--color-text-secondary);
-  transition: color var(--transition-fast), background var(--transition-fast);
-}
-
-.iconButton:hover {
-  color: var(--color-text-primary);
-  background: var(--color-bg-hover);
-}
-
-.iconButtonIcon {
-  width: 18px;
-  height: 18px;
-}
-
-.hero {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-sm);
-}
-
-.eyebrow {
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--color-text-accent);
-}
-
-.heroTitle {
-  font-size: var(--font-size-3xl);
-  font-weight: var(--font-weight-extrabold);
-  letter-spacing: -0.02em;
-  line-height: 1.1;
-  color: var(--color-text-primary);
-}
-
-.heroSubtitle {
-  font-size: var(--font-size-base);
-  color: var(--color-text-secondary);
-}
-
 .stats {
   display: flex;
   gap: var(--spacing-md);
-  margin-top: var(--spacing-sm);
 }
 
 .statCard {
@@ -165,12 +116,6 @@
   font-weight: var(--font-weight-extrabold);
   color: var(--color-text-accent);
   font-variant-numeric: tabular-nums;
-}
-
-.thumbIcon {
-  width: 24px;
-  height: 24px;
-  color: var(--color-text-tertiary);
 }
 
 .info {
@@ -301,31 +246,6 @@
   color: var(--color-text-primary);
 }
 
-.addButton {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--spacing-sm);
-  min-height: 52px;
-  border-radius: var(--radius-lg);
-  border: 1px dashed var(--color-border);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-medium);
-  transition: color var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
-}
-
-.addButton:hover {
-  color: var(--color-accent);
-  border-color: var(--color-accent);
-  background: var(--color-accent-subtle);
-}
-
-.addIcon {
-  width: 18px;
-  height: 18px;
-}
-
 .startButton {
   display: flex;
   align-items: center;
@@ -365,58 +285,6 @@
 
 .saveButton:disabled {
   opacity: 0.5;
-}
-
-.picker {
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-}
-
-.pickerHeader {
-  display: flex;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-sm);
-  border-bottom: 1px solid var(--color-border-subtle);
-}
-
-.pickerHeader input {
-  flex: 1;
-}
-
-.pickerList {
-  max-height: 320px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-xs);
-  padding: var(--spacing-sm);
-}
-
-.pickerItem {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-base);
-  padding: var(--spacing-xs);
-  border-radius: var(--radius-md);
-  text-align: left;
-  transition: background var(--transition-fast);
-}
-
-.pickerItem:hover {
-  background: var(--color-bg-hover);
-}
-
-.pickerEmpty {
-  padding: var(--spacing-base);
-  font-size: var(--font-size-sm);
-  color: var(--color-text-tertiary);
-}
-
-.pickerLink {
-  color: var(--color-accent);
-  text-decoration: underline;
 }
 
 @media (max-width: 768px) {
