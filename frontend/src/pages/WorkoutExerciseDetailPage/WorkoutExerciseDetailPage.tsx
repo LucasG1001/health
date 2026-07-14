@@ -3,16 +3,23 @@ import { useParams } from "react-router-dom";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { YouTubeEmbed } from "../../components/YouTubeEmbed/YouTubeEmbed";
 import { updateExercisePlan, fetchSplit } from "../../services/splitService";
-import { MUSCLE_GROUP_LABELS, formatKg, imageFocalStyle, repsTarget } from "../../utils/format";
+import { MUSCLE_GROUP_LABELS, formatClock, formatKg, imageFocalStyle, repsTarget } from "../../utils/format";
 import { apiErrorMessage } from "../../utils/apiError";
 import type { Split } from "../../types/split";
 import styles from "./WorkoutExerciseDetailPage.module.css";
 
-type EditField = "series" | "reps" | "carga";
+const DEFAULT_REST_SECONDS = 60;
+
+type EditField = "series" | "reps" | "carga" | "descanso";
 
 function parsePositiveInt(raw: string): number | null {
   const parsed = Number(raw);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function parseNonNegativeInt(raw: string): number | null {
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
 }
 
 export function WorkoutExerciseDetailPage() {
@@ -26,6 +33,7 @@ export function WorkoutExerciseDetailPage() {
   const [repsMin, setRepsMin] = useState("");
   const [repsMax, setRepsMax] = useState("");
   const [weight, setWeight] = useState("");
+  const [rest, setRest] = useState("");
 
   const backTo = `/treino/divisoes/${id}`;
 
@@ -42,6 +50,7 @@ export function WorkoutExerciseDetailPage() {
           setRepsMin(String(ex.plannedSets[0]?.targetRepsMin ?? 12));
           setRepsMax(ex.plannedSets[0]?.targetRepsMax != null ? String(ex.plannedSets[0].targetRepsMax) : "");
           setWeight(ex.workingWeightKg != null ? String(ex.workingWeightKg).replace(".", ",") : "");
+          setRest(String(ex.restSeconds ?? DEFAULT_REST_SECONDS));
         }
       })
       .catch((err) => {
@@ -72,12 +81,14 @@ export function WorkoutExerciseDetailPage() {
     const maxValue = repsMax.trim() === "" ? null : parsePositiveInt(repsMax);
     const weightValue = weight.trim() === "" ? null : Number(weight.replace(",", "."));
     if (weightValue !== null && Number.isNaN(weightValue)) return;
+    const restValue = parseNonNegativeInt(rest) ?? DEFAULT_REST_SECONDS;
     try {
       const updated = await updateExercisePlan(id, sxId, {
         series: seriesValue,
         targetRepsMin: minValue,
         targetRepsMax: maxValue,
         workingWeightKg: weightValue,
+        restSeconds: restValue,
       });
       setSplit(updated);
     } catch (err) {
@@ -190,6 +201,27 @@ export function WorkoutExerciseDetailPage() {
                 </span>
               )}
               <span className={styles.statLabel}>carga</span>
+            </div>
+
+            <div className={`${styles.statCard} ${styles.statCardEditable}`} onClick={() => startEdit("descanso")}>
+              {editing === "descanso" ? (
+                <input
+                  className={styles.statInput}
+                  type="text"
+                  inputMode="numeric"
+                  value={rest}
+                  autoFocus
+                  onChange={(e) => setRest(e.target.value)}
+                  onBlur={saveEdit}
+                  onKeyDown={onEditKeyDown}
+                  aria-label="Descanso em segundos"
+                />
+              ) : (
+                <span className={styles.statValue}>
+                  {formatClock((planned.restSeconds ?? DEFAULT_REST_SECONDS) * 1000)}
+                </span>
+              )}
+              <span className={styles.statLabel}>descanso</span>
             </div>
           </div>
 

@@ -40,13 +40,14 @@ import styles from "./SplitEditorPage.module.css";
 
 const LONG_PRESS_MS = 500;
 const DEFAULT_REST_WARMUP = 45;
-const DEFAULT_REST_WORKING = 90;
+const DEFAULT_REST_WORKING = 60;
 
 function toInput(exercise: SplitExercise): SplitExerciseInput {
   return {
     exerciseId: exercise.exerciseId,
     notes: exercise.notes,
     workingWeightKg: exercise.workingWeightKg,
+    restSeconds: exercise.restSeconds,
     plannedSets:
       exercise.plannedSets.length > 0
         ? exercise.plannedSets.map((set) => ({
@@ -265,15 +266,12 @@ export function SplitEditorPage() {
 
   const restMsFor = (set: SessionSet): number => {
     const seconds =
-      set.restSeconds ??
-      (set.setType === "warmup"
-        ? settings?.restWarmupSeconds ?? DEFAULT_REST_WARMUP
-        : settings?.restWorkingSeconds ?? DEFAULT_REST_WORKING);
+      set.restSeconds ?? (set.setType === "warmup" ? DEFAULT_REST_WARMUP : DEFAULT_REST_WORKING);
     return seconds * 1000;
   };
 
   const defaultRestSeconds = (exercise: SplitExercise): number =>
-    exercise.restSeconds ?? settings?.restWorkingSeconds ?? DEFAULT_REST_WORKING;
+    exercise.restSeconds ?? DEFAULT_REST_WORKING;
 
   const sessionExerciseFor = (exercise: SplitExercise): { sx: SessionExercise; index: number } | null => {
     if (!inProgress || !session) return null;

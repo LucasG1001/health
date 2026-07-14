@@ -172,10 +172,17 @@ export async function replaceExercises(
     for (let i = 0; i < exercises.length; i++) {
       const exercise = exercises[i]!;
       const inserted = await client.query<{ id: string }>(
-        `INSERT INTO split_exercises (split_id, exercise_id, position, working_weight_kg, notes)
-         VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO split_exercises (split_id, exercise_id, position, working_weight_kg, rest_seconds, notes)
+         VALUES ($1, $2, $3, $4, $5, $6)
          RETURNING id`,
-        [splitId, exercise.exerciseId, i, exercise.workingWeightKg ?? null, exercise.notes ?? null]
+        [
+          splitId,
+          exercise.exerciseId,
+          i,
+          exercise.workingWeightKg ?? null,
+          exercise.restSeconds ?? null,
+          exercise.notes ?? null,
+        ]
       );
       const splitExerciseId = inserted.rows[0]!.id;
 
@@ -216,9 +223,10 @@ export async function updateExercisePlan(
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    await client.query("UPDATE split_exercises SET working_weight_kg = $2 WHERE id = $1", [
+    await client.query("UPDATE split_exercises SET working_weight_kg = $2, rest_seconds = $3 WHERE id = $1", [
       splitExerciseId,
       input.workingWeightKg ?? null,
+      input.restSeconds ?? null,
     ]);
     await client.query("DELETE FROM planned_sets WHERE split_exercise_id = $1", [splitExerciseId]);
     for (let position = 0; position < input.series; position++) {

@@ -48,11 +48,12 @@
 
 .statCard {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  padding: var(--spacing-base);
+  padding: var(--spacing-md) var(--spacing-sm);
   border-radius: var(--radius-lg);
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border-subtle);
@@ -68,10 +69,11 @@
 }
 
 .statValue {
-  font-size: var(--font-size-xl);
+  font-size: var(--font-size-lg);
   font-weight: var(--font-weight-bold);
   color: var(--color-text-primary);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .statValueAccent {
@@ -80,7 +82,7 @@
 
 .statInput {
   width: 100%;
-  max-width: 72px;
+  max-width: 60px;
   padding: 2px 6px;
   text-align: center;
   font-size: var(--font-size-xl);

@@ -25,6 +25,7 @@ export const replaceSplitExercisesSchema = z.object({
         exerciseId: z.uuid("Exercício inválido."),
         notes: z.string().max(2000).nullish(),
         workingWeightKg: z.number().min(0).max(2000).nullish(),
+        restSeconds: z.number().int().min(0).max(3600).nullish(),
         plannedSets: z.array(plannedSetSchema).min(1, "Cada exercício precisa de ao menos uma série."),
       })
     )
@@ -36,6 +37,7 @@ export const updateExercisePlanSchema = z.object({
   targetRepsMin: z.number().int().min(1, "Repetições alvo inválidas.").max(200),
   targetRepsMax: z.number().int().min(1).max(200).nullish(),
   workingWeightKg: z.number().min(0).max(2000).nullish(),
+  restSeconds: z.number().int().min(0).max(3600).nullish(),
 });
 
 export type CreateSplitBody = z.infer<typeof createSplitSchema>;

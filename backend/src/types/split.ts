@@ -87,6 +87,7 @@ export interface SplitExerciseInput {
   exerciseId: string;
   notes?: string | null;
   workingWeightKg?: number | null;
+  restSeconds?: number | null;
   plannedSets: {
     targetRepsMin: number;
     targetRepsMax?: number | null;
@@ -98,4 +99,5 @@ export interface UpdateExercisePlanInput {
   targetRepsMin: number;
   targetRepsMax?: number | null;
   workingWeightKg?: number | null;
+  restSeconds?: number | null;
 }
