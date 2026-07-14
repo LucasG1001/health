@@ -1,0 +1,49 @@
+.stepper {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.node {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: var(--radius-full);
+  border: 2px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-tertiary);
+  background: var(--color-bg-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.nodeFilled {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+}
+
+.check {
+  width: 15px;
+  height: 15px;
+}
+
+.connector {
+  flex: 1;
+  height: 4px;
+  margin: 0 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-bg-tertiary);
+  overflow: hidden;
+}
+
+.connectorFill {
+  display: block;
+  height: 100%;
+  background: var(--color-accent);
+  border-radius: var(--radius-full);
+  transition: width var(--transition-fast) linear;
+}

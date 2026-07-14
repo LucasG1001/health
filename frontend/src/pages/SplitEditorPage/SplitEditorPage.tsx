@@ -1,21 +1,44 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
-import { WorkoutHeader } from "../../components/WorkoutHeader/WorkoutHeader";
 import { EmptyState } from "../../components/EmptyState/EmptyState";
 import { Modal } from "../../components/Modal/Modal";
 import { DayOfWeekPicker } from "../../components/DayOfWeekPicker/DayOfWeekPicker";
-import { CloseIcon, DumbbellIcon, PlusIcon } from "../../components/Icon/icons";
+import { SetStepper } from "../../components/SetStepper/SetStepper";
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  CloseIcon,
+  DumbbellIcon,
+  PlayIcon,
+  PlusIcon,
+  StopIcon,
+} from "../../components/Icon/icons";
 import { useExercises } from "../../hooks/useExercises";
 import { useWorkoutSession } from "../../context/workoutSessionStore";
-import { completedSetsCount, hasPendingSets, totalSetsCount } from "../../utils/sessionMachine";
+import { useSettings } from "../../hooks/useSettings";
+import { useNow } from "../../hooks/useNow";
+import { useRestTimer } from "../../hooks/useRestTimer";
+import { useAudioCue } from "../../hooks/useAudioCue";
+import { useWakeLock } from "../../hooks/useWakeLock";
+import { hasPendingSets } from "../../utils/sessionMachine";
 import { createSplit, fetchSplit, replaceSplitExercises, updateSplit } from "../../services/splitService";
-import { MUSCLE_GROUP_LABELS, formatKg, imageFocalStyle, repsTarget } from "../../utils/format";
+import {
+  MUSCLE_GROUP_LABELS,
+  formatClock,
+  formatKg,
+  formatStopwatch,
+  imageFocalStyle,
+  repsTarget,
+} from "../../utils/format";
 import { apiErrorMessage } from "../../utils/apiError";
 import type { Split, SplitExercise, SplitExerciseInput } from "../../types/split";
+import type { SessionExercise, SessionSet } from "../../types/session";
 import styles from "./SplitEditorPage.module.css";
 
 const LONG_PRESS_MS = 500;
+const DEFAULT_REST_WARMUP = 45;
+const DEFAULT_REST_WORKING = 90;
 
 function toInput(exercise: SplitExercise): SplitExerciseInput {
   return {
@@ -35,16 +58,41 @@ function toInput(exercise: SplitExercise): SplitExerciseInput {
 export function SplitEditorPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { state, finish } = useWorkoutSession();
   const { exercises: catalog } = useExercises();
+  const { settings } = useSettings();
+  const { state, start, playExercise, completeSet, skipRest, restEnded, prepareCued, finish, editSet } =
+    useWorkoutSession();
 
   const session = state.session;
   const inProgress = session !== null && session.status === "in_progress" && session.splitId === id;
+
+  const { unlock, cuePrepare, cueGo } = useAudioCue({
+    soundEnabled: settings?.soundEnabled ?? true,
+    vibrationEnabled: settings?.vibrationEnabled ?? true,
+  });
+  useWakeLock((settings?.wakeLockEnabled ?? true) && inProgress);
+
+  const { remainingMs, progress, preparing } = useRestTimer({
+    endsAt: inProgress && state.phase === "resting" ? state.restEndsAt : null,
+    totalMs: state.restTotalMs,
+    onPrepare: () => {
+      if (!state.prepareCued) {
+        cuePrepare();
+        prepareCued();
+      }
+    },
+    onEnd: () => {
+      cueGo();
+      restEnded();
+    },
+  });
+  const now = useNow(inProgress);
 
   const [split, setSplit] = useState<Split | null>(null);
   const [loading, setLoading] = useState(Boolean(id));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   const [name, setName] = useState("");
   const [weekdays, setWeekdays] = useState<number[]>([]);
@@ -217,6 +265,70 @@ export function SplitEditorPage() {
     ]);
   };
 
+  const restMsFor = (set: SessionSet): number => {
+    const seconds =
+      set.restSeconds ??
+      (set.setType === "warmup"
+        ? settings?.restWarmupSeconds ?? DEFAULT_REST_WARMUP
+        : settings?.restWorkingSeconds ?? DEFAULT_REST_WORKING);
+    return seconds * 1000;
+  };
+
+  const defaultRestSeconds = (exercise: SplitExercise): number =>
+    exercise.restSeconds ?? settings?.restWorkingSeconds ?? DEFAULT_REST_WORKING;
+
+  const sessionExerciseFor = (exercise: SplitExercise): { sx: SessionExercise; index: number } | null => {
+    if (!inProgress || !session) return null;
+    const index = session.exercises.findIndex((e) => e.exerciseId === exercise.exerciseId);
+    return index >= 0 ? { sx: session.exercises[index]!, index } : null;
+  };
+
+  const handlePlay = async (exercise: SplitExercise) => {
+    if (busy) return;
+    unlock();
+    setBusy(true);
+    setError(null);
+    try {
+      let current = inProgress ? session : null;
+      if (!current) current = await start(id);
+      if (!current) return;
+      const sxIndex = current.exercises.findIndex((e) => e.exerciseId === exercise.exerciseId);
+      const sx = sxIndex >= 0 ? current.exercises[sxIndex] : null;
+      if (!sx) return;
+      if (sxIndex !== state.currentExerciseIndex) playExercise(sxIndex);
+      const pending = sx.sets.find((s) => s.completedAt === null);
+      if (!pending) return;
+      await completeSet({
+        setId: pending.id,
+        weightKg: pending.weightKg ?? exercise.workingWeightKg ?? null,
+        reps: pending.reps ?? pending.targetRepsMin ?? 1,
+        restMs: restMsFor(pending),
+      });
+    } catch (err) {
+      setError(apiErrorMessage(err, "Não foi possível iniciar a série."));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleConclude = async (exercise: SplitExercise) => {
+    const match = sessionExerciseFor(exercise);
+    if (!match || busy) return;
+    const pending = match.sx.sets.filter((s) => s.completedAt === null);
+    if (pending.length === 0) return;
+    setBusy(true);
+    setError(null);
+    try {
+      for (const set of pending) {
+        await editSet(set.id, { completed: true });
+      }
+    } catch (err) {
+      setError(apiErrorMessage(err, "Não foi possível concluir o exercício."));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handleFinish = async () => {
     const sessionId = session?.id;
     try {
@@ -245,107 +357,151 @@ export function SplitEditorPage() {
     }
   };
 
-  const allDone =
-    inProgress && session
-      ? session.exercises.length > 0 && session.exercises.every((ex) => !hasPendingSets(ex))
-      : false;
-
-  const headerActions =
-    !inProgress && split ? (
-      <button type="button" className={styles.editButton} onClick={openEditInfo}>
-        Editar
-      </button>
-    ) : undefined;
-
   const planList = dragOrder ?? split?.exercises ?? [];
-  const totalSets = split ? split.exercises.reduce((sum, ex) => sum + ex.plannedSets.length, 0) : 0;
   const muscleSummary = split
     ? Array.from(new Set(split.exercises.map((ex) => ex.muscleGroup)))
         .map((group) => MUSCLE_GROUP_LABELS[group])
         .join(" · ")
     : "";
-  const estimatedMinutes = Math.max(5, totalSets * 2);
-  const percent =
-    inProgress && session
-      ? Math.round((completedSetsCount(session) / Math.max(1, totalSetsCount(session))) * 100)
-      : null;
+  const elapsedMs = inProgress && session ? now - new Date(session.startedAt).getTime() : 0;
 
   return (
     <div className={styles.page}>
-      <WorkoutHeader
-        title={split?.name ?? "Treino"}
-        subtitle={muscleSummary || undefined}
-        percent={percent}
-        backTo="/treino"
-        actions={headerActions}
-      />
+      <header className={styles.topBar}>
+        <button type="button" className={styles.iconBtn} onClick={() => navigate("/treino")} aria-label="Voltar">
+          <ChevronLeftIcon className={styles.navIcon} />
+        </button>
+        <span className={styles.clock}>{inProgress ? formatStopwatch(elapsedMs) : ""}</span>
+        {!inProgress && split ? (
+          <button type="button" className={styles.editButton} onClick={openEditInfo}>
+            Editar
+          </button>
+        ) : (
+          <span className={styles.topSlot} />
+        )}
+      </header>
+
+      {split && (
+        <div className={styles.hero}>
+          <h1 className={styles.heroTitle}>{split.name}</h1>
+          {muscleSummary && <p className={styles.heroSubtitle}>{muscleSummary}</p>}
+        </div>
+      )}
 
       {error && <div className={styles.error}>{error}</div>}
       {loading && <p className={styles.loading}>Carregando…</p>}
 
       {split && (
         <>
-          <div className={styles.stats}>
-            <div className={styles.statCard}>
-              <span className={styles.statValue}>{split.exercises.length}</span>
-              <span className={styles.statLabel}>exercícios</span>
-            </div>
-            <div className={styles.statCard}>
-              <span className={styles.statValue}>{totalSets}</span>
-              <span className={styles.statLabel}>séries</span>
-            </div>
-            <div className={styles.statCard}>
-              <span className={`${styles.statValue} ${styles.statValueAccent}`}>~{estimatedMinutes} min</span>
-              <span className={styles.statLabel}>estimado</span>
-            </div>
-          </div>
-
           {planList.length > 0 ? (
             <div
               className={`${styles.exerciseList} ${dragIndex !== null ? styles.listDragging : ""}`}
               onPointerMove={onRowPointerMove}
               onPointerUp={onRowPointerUp}
             >
-              {planList.map((exercise, index) => (
-                <div
-                  key={exercise.id}
-                  ref={(el) => {
-                    rowRefs.current[index] = el;
-                  }}
-                  className={`${styles.exerciseRow} ${dragIndex === index ? styles.exerciseRowDragging : ""}`}
-                  onPointerDown={inProgress ? undefined : (e) => onRowPointerDown(e, index, planList)}
-                >
-                  <button
-                    type="button"
-                    className={styles.exerciseMain}
-                    onClick={() => {
-                      if (suppressClickRef.current) {
-                        suppressClickRef.current = false;
-                        return;
-                      }
-                      navigate(`/treino/divisoes/${id}/ex/${exercise.id}`);
+              {planList.map((exercise, index) => {
+                const match = sessionExerciseFor(exercise);
+                const sx = match?.sx ?? null;
+                const total = sx ? sx.sets.length : exercise.plannedSets.length;
+                const completed = sx ? sx.sets.filter((s) => s.completedAt !== null).length : 0;
+                const done = sx ? !hasPendingSets(sx) : false;
+                const isActive = match !== null && match.index === state.currentExerciseIndex;
+                const restingHere = isActive && state.phase === "resting";
+                const timeLabel = restingHere
+                  ? preparing
+                    ? "prepare!"
+                    : formatClock(remainingMs)
+                  : formatClock(defaultRestSeconds(exercise) * 1000);
+                return (
+                  <div
+                    key={exercise.id}
+                    ref={(el) => {
+                      rowRefs.current[index] = el;
                     }}
+                    className={`${styles.exerciseRow} ${dragIndex === index ? styles.exerciseRowDragging : ""} ${
+                      isActive ? styles.exerciseRowActive : ""
+                    }`}
+                    onPointerDown={inProgress ? undefined : (e) => onRowPointerDown(e, index, planList)}
                   >
-                    <div className={styles.numBadge}>
-                      <span className={styles.numBadgeText}>{index + 1}</span>
+                    <div className={styles.cardMain}>
+                      <button
+                        type="button"
+                        className={`${styles.checkCircle} ${done ? styles.checkCircleDone : ""}`}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={() => handleConclude(exercise)}
+                        disabled={!sx || done || busy}
+                        aria-label="Concluir exercício"
+                      />
+                      <button
+                        type="button"
+                        className={styles.cardBody}
+                        onClick={() => {
+                          if (suppressClickRef.current) {
+                            suppressClickRef.current = false;
+                            return;
+                          }
+                          navigate(`/treino/divisoes/${id}/ex/${exercise.id}`);
+                        }}
+                      >
+                        <div className={styles.thumb}>
+                          {exercise.imageUrl ? (
+                            <img src={exercise.imageUrl} alt="" loading="lazy" style={imageFocalStyle(exercise)} />
+                          ) : (
+                            <DumbbellIcon className={styles.thumbIcon} />
+                          )}
+                        </div>
+                        <div className={styles.info}>
+                          <span className={styles.name}>{exercise.name}</span>
+                          <span className={styles.meta}>
+                            {exercise.plannedSets.length}×{" "}
+                            {repsTarget(
+                              exercise.plannedSets[0]?.targetRepsMin ?? null,
+                              exercise.plannedSets[0]?.targetRepsMax ?? null
+                            )}{" "}
+                            | {formatKg(exercise.workingWeightKg)}
+                          </span>
+                        </div>
+                        <ChevronRightIcon className={styles.chevron} />
+                      </button>
                     </div>
-                    <div className={styles.info}>
-                      <span className={styles.name}>{exercise.name}</span>
-                      <span className={styles.meta}>{MUSCLE_GROUP_LABELS[exercise.muscleGroup]}</span>
+
+                    <div className={styles.restLine}>
+                      <span className={styles.restTime}>{timeLabel}</span>
+                      <span className={styles.restLabel}>(Descanso entre séries)</span>
+                      {restingHere ? (
+                        <button
+                          type="button"
+                          className={styles.restControl}
+                          onPointerDown={(e) => e.stopPropagation()}
+                          onClick={skipRest}
+                          aria-label="Pular descanso"
+                        >
+                          <StopIcon className={styles.restControlIcon} />
+                        </button>
+                      ) : (
+                        !done && (
+                          <button
+                            type="button"
+                            className={styles.restControl}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={() => handlePlay(exercise)}
+                            disabled={busy}
+                            aria-label="Concluir série"
+                          >
+                            <PlayIcon className={styles.restControlIcon} />
+                          </button>
+                        )
+                      )}
                     </div>
-                    <div className={styles.setsInfo}>
-                      <span className={styles.setsReps}>
-                        {exercise.plannedSets.length}×
-                        {repsTarget(
-                          exercise.plannedSets[0]?.targetRepsMin ?? null,
-                          exercise.plannedSets[0]?.targetRepsMax ?? null
-                        )}
-                      </span>
-                      <span className={styles.weight}>{formatKg(exercise.workingWeightKg)}</span>
-                    </div>
-                  </button>
-                </div>
-              ))}
+
+                    {isActive && total > 0 && (
+                      <div className={styles.stepperWrap}>
+                        <SetStepper total={total} completed={completed} restProgress={restingHere ? progress : null} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <EmptyState
@@ -417,7 +573,7 @@ export function SplitEditorPage() {
               </button>
             ))}
 
-          {allDone && (
+          {inProgress && (
             <button type="button" className={styles.startButton} onClick={handleFinish}>
               Finalizar treino
             </button>
@@ -437,7 +593,6 @@ export function SplitEditorPage() {
           </div>
         </Modal>
       )}
-
     </div>
   );
 }
