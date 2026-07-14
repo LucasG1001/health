@@ -99,11 +99,15 @@ export function WorkoutExerciseDetailPage() {
 
       {planned && (
         <>
-          <div className={styles.hero}>
-            {planned.imageUrl && (
-              <img className={styles.heroImage} src={planned.imageUrl} alt="" style={imageFocalStyle(planned)} />
-            )}
-          </div>
+          {planned.videoUrl ? (
+            <YouTubeEmbed url={planned.videoUrl} title={planned.name} />
+          ) : (
+            <div className={styles.hero}>
+              {planned.imageUrl && (
+                <img className={styles.heroImage} src={planned.imageUrl} alt="" style={imageFocalStyle(planned)} />
+              )}
+            </div>
+          )}
 
           <div className={styles.stats}>
             <div className={`${styles.statCard} ${styles.statCardEditable}`} onClick={() => startEdit("series")}>
@@ -188,8 +192,6 @@ export function WorkoutExerciseDetailPage() {
               <span className={styles.statLabel}>carga</span>
             </div>
           </div>
-
-          {planned.videoUrl && <YouTubeEmbed url={planned.videoUrl} title={planned.name} />}
 
           {planned.instructions && (
             <section className={styles.section}>
