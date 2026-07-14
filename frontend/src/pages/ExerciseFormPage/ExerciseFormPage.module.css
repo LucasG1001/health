@@ -18,6 +18,27 @@
   color: var(--color-text-tertiary);
 }
 
+.deleteButton {
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  color: var(--color-text-tertiary);
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.deleteButton:hover {
+  color: var(--color-error);
+  background: var(--color-error-subtle);
+}
+
+.deleteIcon {
+  width: 18px;
+  height: 18px;
+}
+
 .imageCard {
   display: flex;
   align-items: center;

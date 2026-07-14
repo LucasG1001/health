@@ -3,9 +3,11 @@ import { useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { YouTubeEmbed } from "../../components/YouTubeEmbed/YouTubeEmbed";
 import { ImageFocalPicker } from "../../components/ImageFocalPicker/ImageFocalPicker";
-import { DumbbellIcon } from "../../components/Icon/icons";
+import { ConfirmDialog } from "../../components/ConfirmDialog/ConfirmDialog";
+import { DumbbellIcon, TrashIcon } from "../../components/Icon/icons";
 import {
   createExercise,
+  deleteExercise,
   fetchExercise,
   updateExercise,
   uploadExerciseImage,
@@ -36,6 +38,7 @@ export function ExerciseFormPage() {
   const [loading, setLoading] = useState(Boolean(id));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -108,7 +111,22 @@ export function ExerciseFormPage() {
 
   return (
     <div className={styles.page}>
-      <PageHeader title={isEdit ? "Editar exercício" : "Novo exercício"} backTo="/treino/exercicios" />
+      <PageHeader
+        title={isEdit ? "Editar exercício" : "Novo exercício"}
+        backTo="/treino/exercicios"
+        actions={
+          isEdit ? (
+            <button
+              type="button"
+              className={styles.deleteButton}
+              onClick={() => setDeleting(true)}
+              aria-label="Excluir exercício"
+            >
+              <TrashIcon className={styles.deleteIcon} />
+            </button>
+          ) : undefined
+        }
+      />
 
       {error && <div className={styles.error}>{error}</div>}
       {loading ? (
@@ -223,6 +241,25 @@ export function ExerciseFormPage() {
             {saving ? "Salvando…" : isEdit ? "Salvar alterações" : "Cadastrar exercício"}
           </button>
         </>
+      )}
+
+      {deleting && id && (
+        <ConfirmDialog
+          title="Excluir exercício"
+          message="O exercício sai do seu catálogo. O histórico de treinos já feitos é preservado."
+          confirmLabel="Excluir"
+          danger
+          onCancel={() => setDeleting(false)}
+          onConfirm={async () => {
+            try {
+              await deleteExercise(id);
+              navigate("/treino/exercicios");
+            } catch (err) {
+              setError(apiErrorMessage(err, "Não foi possível excluir o exercício."));
+              setDeleting(false);
+            }
+          }}
+        />
       )}
     </div>
   );

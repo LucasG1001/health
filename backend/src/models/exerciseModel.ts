@@ -62,7 +62,7 @@ export async function create(entry: NewExercise): Promise<Exercise> {
   try {
     const result = await pool.query<ExerciseRow>(
       `INSERT INTO exercises (name, muscle_group, equipment, image_url, machine_setting, notes, video_url, external_id, image_path, image_focal_x, image_focal_y, image_zoom)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10, 50), COALESCE($11, 50), COALESCE($12, 1))
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING *`,
       [
         entry.name,
@@ -74,9 +74,9 @@ export async function create(entry: NewExercise): Promise<Exercise> {
         entry.videoUrl ?? null,
         entry.externalId ?? null,
         entry.imagePath ?? null,
-        entry.imageFocalX ?? null,
-        entry.imageFocalY ?? null,
-        entry.imageZoom ?? null,
+        entry.imageFocalX ?? 50,
+        entry.imageFocalY ?? 50,
+        entry.imageZoom ?? 1,
       ]
     );
     return toExercise(result.rows[0]!);

@@ -96,7 +96,7 @@ export function ExercisesPage() {
             key={exercise.id}
             type="button"
             className={styles.card}
-            onClick={() => navigate(`/treino/exercicios/${exercise.id}`)}
+            onClick={() => navigate(`/treino/exercicios/${exercise.id}/editar`)}
           >
             <div className={styles.thumb}>
               {exercise.imageUrl ? (

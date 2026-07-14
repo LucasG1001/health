@@ -17,7 +17,6 @@ import { SplitEditorPage } from "./pages/SplitEditorPage/SplitEditorPage";
 import { WorkoutExerciseDetailPage } from "./pages/WorkoutExerciseDetailPage/WorkoutExerciseDetailPage";
 import { ExercisesPage } from "./pages/ExercisesPage/ExercisesPage";
 import { ExerciseFormPage } from "./pages/ExerciseFormPage/ExerciseFormPage";
-import { ExerciseDetailPage } from "./pages/ExerciseDetailPage/ExerciseDetailPage";
 import { SessionSummaryPage } from "./pages/SessionSummaryPage/SessionSummaryPage";
 import { HistoryPage } from "./pages/HistoryPage/HistoryPage";
 import { SessionDetailPage } from "./pages/SessionDetailPage/SessionDetailPage";
@@ -65,7 +64,6 @@ function Layout() {
           <Route path="/treino/exercicios" element={<ExercisesPage />} />
           <Route path="/treino/exercicios/novo" element={<ExerciseFormPage />} />
           <Route path="/treino/exercicios/:id/editar" element={<ExerciseFormPage />} />
-          <Route path="/treino/exercicios/:id" element={<ExerciseDetailPage />} />
           <Route path="/treino/sessao/:id/resumo" element={<SessionSummaryPage />} />
           <Route path="/treino/historico" element={<HistoryPage />} />
           <Route path="/treino/historico/:id" element={<SessionDetailPage />} />
