@@ -229,6 +229,28 @@
   flex-shrink: 0;
 }
 
+.removeButton {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  color: var(--color-text-tertiary);
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.removeButton:hover {
+  color: var(--color-error);
+  background: var(--color-error-subtle);
+}
+
+.removeIcon {
+  width: 18px;
+  height: 18px;
+}
+
 .restLine {
   display: flex;
   align-items: center;

@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { EmptyState } from "../../components/EmptyState/EmptyState";
 import { Modal } from "../../components/Modal/Modal";
+import { ConfirmDialog } from "../../components/ConfirmDialog/ConfirmDialog";
 import { DayOfWeekPicker } from "../../components/DayOfWeekPicker/DayOfWeekPicker";
 import { SetStepper } from "../../components/SetStepper/SetStepper";
 import {
@@ -13,6 +14,7 @@ import {
   PlayIcon,
   PlusIcon,
   StopIcon,
+  TrashIcon,
 } from "../../components/Icon/icons";
 import { useExercises } from "../../hooks/useExercises";
 import { useWorkoutSession } from "../../context/workoutSessionStore";
@@ -96,6 +98,7 @@ export function SplitEditorPage() {
   const [editWeekdays, setEditWeekdays] = useState<number[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerQuery, setPickerQuery] = useState("");
+  const [removingId, setRemovingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -324,6 +327,12 @@ export function SplitEditorPage() {
     }
   };
 
+  const removeExercise = async (sxId: string) => {
+    if (!split) return;
+    setRemovingId(null);
+    await persist(split.exercises.filter((e) => e.id !== sxId).map(toInput));
+  };
+
   const handleFinish = async () => {
     const sessionId = session?.id;
     try {
@@ -456,6 +465,17 @@ export function SplitEditorPage() {
                         </div>
                         <ChevronRightIcon className={styles.chevron} />
                       </button>
+                      {!inProgress && (
+                        <button
+                          type="button"
+                          className={styles.removeButton}
+                          onPointerDown={(e) => e.stopPropagation()}
+                          onClick={() => setRemovingId(exercise.id)}
+                          aria-label="Remover exercício do treino"
+                        >
+                          <TrashIcon className={styles.removeIcon} />
+                        </button>
+                      )}
                     </div>
 
                     <div className={styles.restLine}>
@@ -585,6 +605,17 @@ export function SplitEditorPage() {
             <DayOfWeekPicker value={editWeekdays} onChange={setEditWeekdays} />
           </div>
         </Modal>
+      )}
+
+      {removingId && (
+        <ConfirmDialog
+          title="Remover exercício do treino?"
+          message="O exercício sai desta divisão. O catálogo e os treinos já feitos são preservados."
+          confirmLabel="Remover"
+          danger
+          onCancel={() => setRemovingId(null)}
+          onConfirm={() => removeExercise(removingId)}
+        />
       )}
     </div>
   );

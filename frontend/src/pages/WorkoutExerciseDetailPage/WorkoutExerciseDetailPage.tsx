@@ -103,10 +103,6 @@ export function WorkoutExerciseDetailPage() {
             {planned.imageUrl && (
               <img className={styles.heroImage} src={planned.imageUrl} alt="" style={imageFocalStyle(planned)} />
             )}
-            <div className={styles.heroOverlay}>
-              <h1 className={styles.heroName}>{planned.name}</h1>
-              <span className={styles.heroMuscle}>{MUSCLE_GROUP_LABELS[planned.muscleGroup]}</span>
-            </div>
           </div>
 
           <div className={styles.stats}>
