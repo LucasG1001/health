@@ -188,7 +188,7 @@ export async function start(splitId: string): Promise<WorkoutSession> {
   const plan = await pool.query<StartPlanRow>(
     `SELECT se.id AS split_exercise_id, se.exercise_id, e.name AS exercise_name,
             se.position AS exercise_position, se.rest_seconds AS exercise_rest_seconds,
-            se.working_weight_kg AS exercise_working_weight_kg,
+            e.working_weight_kg AS exercise_working_weight_kg,
             ps.id AS set_id, ps.position AS set_position, ps.set_type, ps.variation,
             ps.target_reps_min, ps.target_reps_max, ps.suggested_weight_kg,
             ps.rest_seconds AS set_rest_seconds

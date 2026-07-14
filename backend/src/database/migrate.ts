@@ -130,6 +130,10 @@ export async function migrate(): Promise<void> {
   `);
 
   await pool.query(`
+    ALTER TABLE exercises ADD COLUMN IF NOT EXISTS working_weight_kg NUMERIC(6,2);
+  `);
+
+  await pool.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS exercises_external_idx ON exercises (external_id)
       WHERE external_id IS NOT NULL;
   `);
@@ -315,5 +319,18 @@ export async function migrate(): Promise<void> {
       session_id  UUID REFERENCES workout_sessions(id) ON DELETE SET NULL,
       awarded_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+  `);
+
+  // Seed a carga global do exercício a partir de cargas já definidas por treino (uma vez).
+  await pool.query(`
+    UPDATE exercises e
+       SET working_weight_kg = sub.w
+      FROM (
+        SELECT exercise_id, MAX(working_weight_kg) AS w
+          FROM split_exercises
+         WHERE working_weight_kg IS NOT NULL
+         GROUP BY exercise_id
+      ) sub
+     WHERE e.id = sub.exercise_id AND e.working_weight_kg IS NULL;
   `);
 }

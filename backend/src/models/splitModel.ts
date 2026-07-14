@@ -53,7 +53,8 @@ function toSplitExercise(row: SplitExerciseRow, plannedSetRows: PlannedSetRow[])
 }
 
 const EXERCISES_SQL = `
-  SELECT se.id, se.split_id, se.exercise_id, se.position, se.rest_seconds, se.working_weight_kg, se.notes,
+  SELECT se.id, se.split_id, se.exercise_id, se.position, se.rest_seconds, se.notes,
+         e.working_weight_kg,
          e.name AS exercise_name, e.muscle_group, e.equipment, e.image_path, e.image_url,
          e.image_focal_x, e.image_focal_y, e.image_zoom, e.machine_setting,
          e.video_url, e.notes AS exercise_notes

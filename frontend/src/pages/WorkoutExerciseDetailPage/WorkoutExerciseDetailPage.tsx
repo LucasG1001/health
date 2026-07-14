@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { YouTubeEmbed } from "../../components/YouTubeEmbed/YouTubeEmbed";
 import { updateExercisePlan, fetchSplit } from "../../services/splitService";
+import { updateExercise } from "../../services/exerciseService";
 import { MUSCLE_GROUP_LABELS, formatClock, formatKg, imageFocalStyle, repsTarget } from "../../utils/format";
 import { apiErrorMessage } from "../../utils/apiError";
 import type { Split } from "../../types/split";
@@ -83,11 +84,13 @@ export function WorkoutExerciseDetailPage() {
     if (weightValue !== null && Number.isNaN(weightValue)) return;
     const restValue = parseNonNegativeInt(rest) ?? DEFAULT_REST_SECONDS;
     try {
+      if (weightValue !== (planned.workingWeightKg ?? null)) {
+        await updateExercise(planned.exerciseId, { workingWeightKg: weightValue });
+      }
       const updated = await updateExercisePlan(id, sxId, {
         series: seriesValue,
         targetRepsMin: minValue,
         targetRepsMax: maxValue,
-        workingWeightKg: weightValue,
         restSeconds: restValue,
       });
       setSplit(updated);

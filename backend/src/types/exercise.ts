@@ -22,6 +22,7 @@ export interface ExerciseRow {
   image_focal_x: number;
   image_focal_y: number;
   image_zoom: number;
+  working_weight_kg: number | null;
   machine_setting: string | null;
   notes: string | null;
   video_url: string | null;
@@ -40,6 +41,7 @@ export interface Exercise {
   imageFocalX: number;
   imageFocalY: number;
   imageZoom: number;
+  workingWeightKg: number | null;
   machineSetting: string | null;
   notes: string | null;
   videoUrl: string | null;
@@ -56,6 +58,7 @@ export interface NewExercise {
   imageFocalX?: number;
   imageFocalY?: number;
   imageZoom?: number;
+  workingWeightKg?: number | null;
   machineSetting?: string | null;
   notes?: string | null;
   videoUrl?: string | null;

@@ -22,6 +22,7 @@ export interface Exercise {
   imageFocalX: number;
   imageFocalY: number;
   imageZoom: number;
+  workingWeightKg: number | null;
   machineSetting: string | null;
   notes: string | null;
   videoUrl: string | null;
@@ -37,6 +38,7 @@ export interface ExerciseInput {
   imageFocalX?: number;
   imageFocalY?: number;
   imageZoom?: number;
+  workingWeightKg?: number | null;
   machineSetting?: string | null;
   notes?: string | null;
   videoUrl?: string | null;
