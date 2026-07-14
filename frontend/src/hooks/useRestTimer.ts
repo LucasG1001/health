@@ -1,22 +1,22 @@
 import { useEffect, useRef, useState } from "react";
 
-const PREPARE_THRESHOLD_MS = 10000;
+const COUNTDOWN_FROM_MS = 10000;
 const TICK_MS = 250;
 
 interface UseRestTimerOptions {
   endsAt: number | null;
   totalMs: number | null;
-  onPrepare: () => void;
+  onTick?: (secondsLeft: number) => void;
   onEnd: () => void;
 }
 
-export function useRestTimer({ endsAt, totalMs, onPrepare, onEnd }: UseRestTimerOptions) {
+export function useRestTimer({ endsAt, totalMs, onTick, onEnd }: UseRestTimerOptions) {
   const [now, setNow] = useState(() => Date.now());
-  const callbacksRef = useRef({ onPrepare, onEnd });
+  const callbacksRef = useRef({ onTick, onEnd });
 
   useEffect(() => {
-    callbacksRef.current = { onPrepare, onEnd };
-  }, [onPrepare, onEnd]);
+    callbacksRef.current = { onTick, onEnd };
+  }, [onTick, onEnd]);
 
   useEffect(() => {
     if (endsAt === null) return;
@@ -39,28 +39,37 @@ export function useRestTimer({ endsAt, totalMs, onPrepare, onEnd }: UseRestTimer
 
   const remainingMs = endsAt === null ? 0 : Math.max(0, endsAt - now);
 
-  const edgeRef = useRef<{ endsAt: number | null; remaining: number }>({ endsAt: null, remaining: 0 });
+  const edgeRef = useRef<{ endsAt: number | null; lastSecond: number; ended: boolean }>({
+    endsAt: null,
+    lastSecond: -1,
+    ended: false,
+  });
   useEffect(() => {
     if (endsAt === null) {
-      edgeRef.current = { endsAt: null, remaining: 0 };
+      edgeRef.current = { endsAt: null, lastSecond: -1, ended: false };
       return;
     }
     if (edgeRef.current.endsAt !== endsAt) {
-      edgeRef.current = { endsAt, remaining: remainingMs };
+      edgeRef.current = { endsAt, lastSecond: Math.ceil(remainingMs / 1000), ended: false };
       return;
     }
-    const previous = edgeRef.current.remaining;
-    if (previous > PREPARE_THRESHOLD_MS && remainingMs <= PREPARE_THRESHOLD_MS && remainingMs > 0) {
-      callbacksRef.current.onPrepare();
+    const secondsLeft = Math.ceil(remainingMs / 1000);
+    if (
+      remainingMs > 0 &&
+      remainingMs <= COUNTDOWN_FROM_MS &&
+      secondsLeft !== edgeRef.current.lastSecond
+    ) {
+      edgeRef.current.lastSecond = secondsLeft;
+      callbacksRef.current.onTick?.(secondsLeft);
     }
-    if (previous > 0 && remainingMs === 0) {
+    if (!edgeRef.current.ended && remainingMs === 0) {
+      edgeRef.current.ended = true;
       callbacksRef.current.onEnd();
     }
-    edgeRef.current.remaining = remainingMs;
   }, [endsAt, remainingMs]);
 
   const progress = totalMs && totalMs > 0 ? Math.min(1, Math.max(0, 1 - remainingMs / totalMs)) : 0;
-  const preparing = remainingMs > 0 && remainingMs <= PREPARE_THRESHOLD_MS;
+  const preparing = remainingMs > 0 && remainingMs <= COUNTDOWN_FROM_MS;
 
   return { remainingMs, progress, preparing };
 }

@@ -68,10 +68,15 @@ export function useAudioCue({ soundEnabled, vibrationEnabled }: UseAudioCueOptio
     vibrate([150, 80, 150]);
   }, [beep, vibrate]);
 
+  const cueTick = useCallback(() => {
+    beep(880, 90);
+    vibrate(60);
+  }, [beep, vibrate]);
+
   const cueGo = useCallback(() => {
     beep(1320, 350);
     vibrate(400);
   }, [beep, vibrate]);
 
-  return { unlock, cuePrepare, cueGo };
+  return { unlock, cuePrepare, cueTick, cueGo };
 }

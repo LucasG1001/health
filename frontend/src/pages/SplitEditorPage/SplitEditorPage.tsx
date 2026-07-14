@@ -60,27 +60,22 @@ export function SplitEditorPage() {
   const navigate = useNavigate();
   const { exercises: catalog } = useExercises();
   const { settings } = useSettings();
-  const { state, start, playExercise, completeSet, skipRest, restEnded, prepareCued, finish, editSet } =
+  const { state, start, playExercise, completeSet, skipRest, restEnded, finish, editSet } =
     useWorkoutSession();
 
   const session = state.session;
   const inProgress = session !== null && session.status === "in_progress" && session.splitId === id;
 
-  const { unlock, cuePrepare, cueGo } = useAudioCue({
+  const { unlock, cueTick, cueGo } = useAudioCue({
     soundEnabled: settings?.soundEnabled ?? true,
     vibrationEnabled: settings?.vibrationEnabled ?? true,
   });
   useWakeLock((settings?.wakeLockEnabled ?? true) && inProgress);
 
-  const { remainingMs, progress, preparing } = useRestTimer({
+  const { remainingMs, progress } = useRestTimer({
     endsAt: inProgress && state.phase === "resting" ? state.restEndsAt : null,
     totalMs: state.restTotalMs,
-    onPrepare: () => {
-      if (!state.prepareCued) {
-        cuePrepare();
-        prepareCued();
-      }
-    },
+    onTick: () => cueTick(),
     onEnd: () => {
       cueGo();
       restEnded();
@@ -408,9 +403,7 @@ export function SplitEditorPage() {
                 const isActive = match !== null && match.index === state.currentExerciseIndex;
                 const restingHere = isActive && state.phase === "resting";
                 const timeLabel = restingHere
-                  ? preparing
-                    ? "prepare!"
-                    : formatClock(remainingMs)
+                  ? formatClock(remainingMs)
                   : formatClock(defaultRestSeconds(exercise) * 1000);
                 return (
                   <div
