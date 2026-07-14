@@ -55,6 +55,29 @@
   height: 40px;
 }
 
+.imageEditor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.changeImage {
+  align-self: flex-start;
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.changeImage:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-accent);
+}
+
 .field {
   display: flex;
   flex-direction: column;

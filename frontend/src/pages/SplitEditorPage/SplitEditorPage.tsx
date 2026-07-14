@@ -1,15 +1,16 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { WorkoutHeader } from "../../components/WorkoutHeader/WorkoutHeader";
 import { EmptyState } from "../../components/EmptyState/EmptyState";
 import { Modal } from "../../components/Modal/Modal";
 import { DayOfWeekPicker } from "../../components/DayOfWeekPicker/DayOfWeekPicker";
-import { DumbbellIcon } from "../../components/Icon/icons";
+import { CloseIcon, DumbbellIcon, PlusIcon } from "../../components/Icon/icons";
+import { useExercises } from "../../hooks/useExercises";
 import { useWorkoutSession } from "../../context/workoutSessionStore";
 import { completedSetsCount, hasPendingSets, totalSetsCount } from "../../utils/sessionMachine";
 import { createSplit, fetchSplit, replaceSplitExercises, updateSplit } from "../../services/splitService";
-import { MUSCLE_GROUP_LABELS, formatKg, repsTarget } from "../../utils/format";
+import { MUSCLE_GROUP_LABELS, formatKg, imageFocalStyle, repsTarget } from "../../utils/format";
 import { apiErrorMessage } from "../../utils/apiError";
 import type { Split, SplitExercise, SplitExerciseInput } from "../../types/split";
 import styles from "./SplitEditorPage.module.css";
@@ -35,6 +36,7 @@ export function SplitEditorPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { state, finish } = useWorkoutSession();
+  const { exercises: catalog } = useExercises();
 
   const session = state.session;
   const inProgress = session !== null && session.status === "in_progress" && session.splitId === id;
@@ -49,6 +51,8 @@ export function SplitEditorPage() {
   const [editingInfo, setEditingInfo] = useState(false);
   const [editName, setEditName] = useState("");
   const [editWeekdays, setEditWeekdays] = useState<number[]>([]);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerQuery, setPickerQuery] = useState("");
 
   useEffect(() => {
     if (!id) return;
@@ -67,6 +71,16 @@ export function SplitEditorPage() {
       active = false;
     };
   }, [id]);
+
+  const pickerResults = useMemo(() => {
+    const chosen = new Set(split?.exercises.map((exercise) => exercise.exerciseId));
+    const normalized = pickerQuery.trim().toLowerCase();
+    return catalog.filter(
+      (exercise) =>
+        !chosen.has(exercise.id) &&
+        (normalized === "" || exercise.name.toLowerCase().includes(normalized))
+    );
+  }, [catalog, split, pickerQuery]);
 
   // ---- reorder by long-press + drag (fora da sessão) ----
   const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -191,6 +205,16 @@ export function SplitEditorPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const addExercise = async (exerciseId: string) => {
+    if (!split) return;
+    setPickerOpen(false);
+    setPickerQuery("");
+    await persist([
+      ...split.exercises.map(toInput),
+      { exerciseId, plannedSets: [{ targetRepsMin: 12 }, { targetRepsMin: 12 }, { targetRepsMin: 12 }] },
+    ]);
   };
 
   const handleFinish = async () => {
@@ -330,6 +354,68 @@ export function SplitEditorPage() {
               description="Adicione exercícios a este treino."
             />
           )}
+
+          {!inProgress &&
+            (pickerOpen ? (
+              <div className={styles.picker}>
+                <div className={styles.pickerHeader}>
+                  <input
+                    type="search"
+                    placeholder="Buscar no meu catálogo…"
+                    value={pickerQuery}
+                    onChange={(e) => setPickerQuery(e.target.value)}
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    className={styles.iconButton}
+                    onClick={() => setPickerOpen(false)}
+                    aria-label="Fechar"
+                  >
+                    <CloseIcon className={styles.iconButtonIcon} />
+                  </button>
+                </div>
+                <div className={styles.pickerList}>
+                  {pickerResults.map((exercise) => (
+                    <button
+                      key={exercise.id}
+                      type="button"
+                      className={styles.pickerItem}
+                      onClick={() => addExercise(exercise.id)}
+                    >
+                      <div className={styles.pickerThumb}>
+                        {exercise.imageUrl ? (
+                          <img src={exercise.imageUrl} alt="" loading="lazy" style={imageFocalStyle(exercise)} />
+                        ) : (
+                          <DumbbellIcon className={styles.pickerThumbIcon} />
+                        )}
+                      </div>
+                      <div className={styles.info}>
+                        <span className={styles.name}>{exercise.name}</span>
+                        <span className={styles.meta}>{MUSCLE_GROUP_LABELS[exercise.muscleGroup]}</span>
+                      </div>
+                    </button>
+                  ))}
+                  {pickerResults.length === 0 && (
+                    <p className={styles.pickerEmpty}>
+                      Nada encontrado.{" "}
+                      <button
+                        type="button"
+                        className={styles.pickerLink}
+                        onClick={() => navigate("/treino/exercicios/novo")}
+                      >
+                        Cadastrar exercício
+                      </button>
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <button type="button" className={styles.addButton} onClick={() => setPickerOpen(true)}>
+                <PlusIcon className={styles.addIcon} />
+                Adicionar exercício
+              </button>
+            ))}
 
           {allDone && (
             <button type="button" className={styles.startButton} onClick={handleFinish}>

@@ -19,6 +19,9 @@ export interface ExerciseRow {
   equipment: string | null;
   image_path: string | null;
   image_url: string | null;
+  image_focal_x: number;
+  image_focal_y: number;
+  image_zoom: number;
   machine_setting: string | null;
   notes: string | null;
   video_url: string | null;
@@ -34,6 +37,9 @@ export interface Exercise {
   equipment: string | null;
   imageUrl: string | null;
   hasUploadedImage: boolean;
+  imageFocalX: number;
+  imageFocalY: number;
+  imageZoom: number;
   machineSetting: string | null;
   notes: string | null;
   videoUrl: string | null;
@@ -47,6 +53,9 @@ export interface NewExercise {
   muscleGroup: MuscleGroup;
   equipment?: string | null;
   imageUrl?: string | null;
+  imageFocalX?: number;
+  imageFocalY?: number;
+  imageZoom?: number;
   machineSetting?: string | null;
   notes?: string | null;
   videoUrl?: string | null;

@@ -18,6 +18,9 @@ export interface SplitExercise {
   muscleGroup: MuscleGroup;
   equipment: string | null;
   imageUrl: string | null;
+  imageFocalX: number;
+  imageFocalY: number;
+  imageZoom: number;
   machineSetting: string | null;
   position: number;
   restSeconds: number | null;

@@ -18,6 +18,9 @@ const MUSCLE_GROUPS = [
 const baseExercise = {
   equipment: z.string().max(200).nullish(),
   imageUrl: z.url("URL de imagem inválida.").max(1000).nullish(),
+  imageFocalX: z.number().min(0).max(100).optional(),
+  imageFocalY: z.number().min(0).max(100).optional(),
+  imageZoom: z.number().min(1).max(4).optional(),
   machineSetting: z.string().max(500).nullish(),
   notes: z.string().max(2000).nullish(),
   videoUrl: z.url("Link de vídeo inválido.").max(1000).nullish(),

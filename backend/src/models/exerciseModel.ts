@@ -27,6 +27,9 @@ function toExercise(row: ExerciseRow): Exercise {
     equipment: row.equipment,
     imageUrl: resolveImageUrl(row),
     hasUploadedImage: row.image_path !== null,
+    imageFocalX: row.image_focal_x,
+    imageFocalY: row.image_focal_y,
+    imageZoom: row.image_zoom,
     machineSetting: row.machine_setting,
     notes: row.notes,
     videoUrl: row.video_url,
@@ -58,8 +61,8 @@ export async function findById(id: string): Promise<Exercise | null> {
 export async function create(entry: NewExercise): Promise<Exercise> {
   try {
     const result = await pool.query<ExerciseRow>(
-      `INSERT INTO exercises (name, muscle_group, equipment, image_url, machine_setting, notes, video_url, external_id, image_path)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `INSERT INTO exercises (name, muscle_group, equipment, image_url, machine_setting, notes, video_url, external_id, image_path, image_focal_x, image_focal_y, image_zoom)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10, 50), COALESCE($11, 50), COALESCE($12, 1))
        RETURNING *`,
       [
         entry.name,
@@ -71,6 +74,9 @@ export async function create(entry: NewExercise): Promise<Exercise> {
         entry.videoUrl ?? null,
         entry.externalId ?? null,
         entry.imagePath ?? null,
+        entry.imageFocalX ?? null,
+        entry.imageFocalY ?? null,
+        entry.imageZoom ?? null,
       ]
     );
     return toExercise(result.rows[0]!);
@@ -87,6 +93,9 @@ const COLUMN_MAP: Record<keyof ExercisePatch, string> = {
   muscleGroup: "muscle_group",
   equipment: "equipment",
   imageUrl: "image_url",
+  imageFocalX: "image_focal_x",
+  imageFocalY: "image_focal_y",
+  imageZoom: "image_zoom",
   machineSetting: "machine_setting",
   notes: "notes",
   videoUrl: "video_url",

@@ -19,6 +19,9 @@ export interface Exercise {
   equipment: string | null;
   imageUrl: string | null;
   hasUploadedImage: boolean;
+  imageFocalX: number;
+  imageFocalY: number;
+  imageZoom: number;
   machineSetting: string | null;
   notes: string | null;
   videoUrl: string | null;
@@ -31,6 +34,9 @@ export interface ExerciseInput {
   muscleGroup?: MuscleGroup;
   equipment?: string | null;
   imageUrl?: string | null;
+  imageFocalX?: number;
+  imageFocalY?: number;
+  imageZoom?: number;
   machineSetting?: string | null;
   notes?: string | null;
   videoUrl?: string | null;

@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import type { MuscleGroup } from "../types/exercise";
 import type { SetVariation } from "../types/split";
 import type { ActivityLevel, BloodType } from "../types/profile";
@@ -137,4 +138,17 @@ export function repsTarget(min: number | null, max: number | null): string {
   if (min == null) return "—";
   if (max != null && max !== min) return `${min}-${max}`;
   return String(min);
+}
+
+export function imageFocalStyle(o: {
+  imageFocalX: number;
+  imageFocalY: number;
+  imageZoom: number;
+}): CSSProperties {
+  const position = `${o.imageFocalX}% ${o.imageFocalY}%`;
+  return {
+    objectPosition: position,
+    transformOrigin: position,
+    transform: o.imageZoom !== 1 ? `scale(${o.imageZoom})` : undefined,
+  };
 }

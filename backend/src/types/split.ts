@@ -26,6 +26,9 @@ export interface SplitExerciseRow {
   equipment: string | null;
   image_path: string | null;
   image_url: string | null;
+  image_focal_x: number;
+  image_focal_y: number;
+  image_zoom: number;
   machine_setting: string | null;
   video_url: string | null;
   exercise_notes: string | null;
@@ -57,6 +60,9 @@ export interface SplitExercise {
   muscleGroup: MuscleGroup;
   equipment: string | null;
   imageUrl: string | null;
+  imageFocalX: number;
+  imageFocalY: number;
+  imageZoom: number;
   machineSetting: string | null;
   position: number;
   restSeconds: number | null;

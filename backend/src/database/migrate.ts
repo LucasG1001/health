@@ -118,6 +118,18 @@ export async function migrate(): Promise<void> {
   `);
 
   await pool.query(`
+    ALTER TABLE exercises ADD COLUMN IF NOT EXISTS image_focal_x NUMERIC NOT NULL DEFAULT 50;
+  `);
+
+  await pool.query(`
+    ALTER TABLE exercises ADD COLUMN IF NOT EXISTS image_focal_y NUMERIC NOT NULL DEFAULT 50;
+  `);
+
+  await pool.query(`
+    ALTER TABLE exercises ADD COLUMN IF NOT EXISTS image_zoom NUMERIC NOT NULL DEFAULT 1;
+  `);
+
+  await pool.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS exercises_external_idx ON exercises (external_id)
       WHERE external_id IS NOT NULL;
   `);

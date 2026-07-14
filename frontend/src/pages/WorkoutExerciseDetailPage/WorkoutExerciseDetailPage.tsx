@@ -9,7 +9,7 @@ import { useAudioCue } from "../../hooks/useAudioCue";
 import { useWakeLock } from "../../hooks/useWakeLock";
 import { completedSetsCount, totalSetsCount } from "../../utils/sessionMachine";
 import { fetchSplit, updateExercisePlan } from "../../services/splitService";
-import { MUSCLE_GROUP_LABELS, formatClock, formatKg, repsTarget } from "../../utils/format";
+import { MUSCLE_GROUP_LABELS, formatClock, formatKg, imageFocalStyle, repsTarget } from "../../utils/format";
 import { apiErrorMessage } from "../../utils/apiError";
 import type { Split } from "../../types/split";
 import type { SessionSet } from "../../types/session";
@@ -226,6 +226,14 @@ export function WorkoutExerciseDetailPage() {
       {planned && (
         <>
           <div className={styles.hero}>
+            {planned.imageUrl && (
+              <img
+                className={styles.heroImage}
+                src={planned.imageUrl}
+                alt=""
+                style={imageFocalStyle(planned)}
+              />
+            )}
             <div className={styles.heroOverlay}>
               <h1 className={styles.heroName}>{planned.name}</h1>
               <span className={styles.heroMuscle}>{MUSCLE_GROUP_LABELS[planned.muscleGroup]}</span>

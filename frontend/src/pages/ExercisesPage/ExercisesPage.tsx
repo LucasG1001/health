@@ -4,7 +4,7 @@ import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { EmptyState } from "../../components/EmptyState/EmptyState";
 import { DumbbellIcon, PlusIcon } from "../../components/Icon/icons";
 import { useExercises } from "../../hooks/useExercises";
-import { MUSCLE_GROUP_LABELS } from "../../utils/format";
+import { MUSCLE_GROUP_LABELS, imageFocalStyle } from "../../utils/format";
 import type { MuscleGroup } from "../../types/exercise";
 import styles from "./ExercisesPage.module.css";
 
@@ -100,7 +100,7 @@ export function ExercisesPage() {
           >
             <div className={styles.thumb}>
               {exercise.imageUrl ? (
-                <img src={exercise.imageUrl} alt="" loading="lazy" />
+                <img src={exercise.imageUrl} alt="" loading="lazy" style={imageFocalStyle(exercise)} />
               ) : (
                 <DumbbellIcon className={styles.thumbIcon} />
               )}

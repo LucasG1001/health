@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { YouTubeEmbed } from "../../components/YouTubeEmbed/YouTubeEmbed";
+import { ImageFocalPicker } from "../../components/ImageFocalPicker/ImageFocalPicker";
 import { DumbbellIcon } from "../../components/Icon/icons";
 import {
   createExercise,
@@ -28,6 +29,9 @@ export function ExerciseFormPage() {
   const [instructions, setInstructions] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [focalX, setFocalX] = useState(50);
+  const [focalY, setFocalY] = useState(50);
+  const [zoom, setZoom] = useState(1);
 
   const [loading, setLoading] = useState(Boolean(id));
   const [saving, setSaving] = useState(false);
@@ -46,6 +50,9 @@ export function ExerciseFormPage() {
         setVideoUrl(exercise.videoUrl ?? "");
         setInstructions(exercise.notes ?? "");
         setPreviewUrl(exercise.imageUrl);
+        setFocalX(exercise.imageFocalX);
+        setFocalY(exercise.imageFocalY);
+        setZoom(exercise.imageZoom);
       })
       .catch((err) => {
         if (active) setError(apiErrorMessage(err, "Não foi possível carregar o exercício."));
@@ -62,6 +69,9 @@ export function ExerciseFormPage() {
     if (!file) return;
     setImageFile(file);
     setPreviewUrl(URL.createObjectURL(file));
+    setFocalX(50);
+    setFocalY(50);
+    setZoom(1);
   };
 
   const handleSave = async () => {
@@ -78,6 +88,9 @@ export function ExerciseFormPage() {
       machineSetting: machineSetting.trim() || null,
       videoUrl: videoUrl.trim() || null,
       notes: instructions.trim() || null,
+      imageFocalX: focalX,
+      imageFocalY: focalY,
+      imageZoom: zoom,
     };
     try {
       const saved = isEdit
@@ -102,22 +115,43 @@ export function ExerciseFormPage() {
         <p className={styles.loading}>Carregando…</p>
       ) : (
         <>
-          <label className={styles.imageCard}>
-            {previewUrl ? (
-              <img src={previewUrl} alt="" />
-            ) : (
+          {previewUrl ? (
+            <div className={styles.imageEditor}>
+              <ImageFocalPicker
+                src={previewUrl}
+                focalX={focalX}
+                focalY={focalY}
+                zoom={zoom}
+                onChange={(v) => {
+                  setFocalX(v.focalX);
+                  setFocalY(v.focalY);
+                  setZoom(v.zoom);
+                }}
+              />
+              <label className={styles.changeImage}>
+                Trocar imagem
+                <input
+                  type="file"
+                  accept="image/*"
+                  hidden
+                  onChange={(e) => onPickImage(e.target.files?.[0] ?? null)}
+                />
+              </label>
+            </div>
+          ) : (
+            <label className={styles.imageCard}>
               <span className={styles.imagePlaceholder}>
                 <DumbbellIcon className={styles.placeholderIcon} />
                 Toque para adicionar imagem
               </span>
-            )}
-            <input
-              type="file"
-              accept="image/*"
-              hidden
-              onChange={(e) => onPickImage(e.target.files?.[0] ?? null)}
-            />
-          </label>
+              <input
+                type="file"
+                accept="image/*"
+                hidden
+                onChange={(e) => onPickImage(e.target.files?.[0] ?? null)}
+              />
+            </label>
+          )}
 
           <label className={styles.field}>
             <span className={styles.fieldLabel}>Nome</span>
