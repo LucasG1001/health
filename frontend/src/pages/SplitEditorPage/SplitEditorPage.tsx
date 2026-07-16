@@ -91,7 +91,7 @@ export function SplitEditorPage() {
   const { remainingMs, progress } = useRestTimer({
     endsAt: inProgress && state.phase === "resting" ? state.restEndsAt : null,
     totalMs: state.restTotalMs,
-    onTick: () => cueTick(),
+    onTick: (secondsLeft) => cueTick(secondsLeft),
     onEnd: () => {
       cueGo();
       restEnded();

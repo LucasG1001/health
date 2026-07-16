@@ -37,7 +37,7 @@ export function useAudioCue({ soundEnabled, vibrationEnabled }: UseAudioCueOptio
     }
   }, []);
 
-  const beep = useCallback((frequency: number, durationMs: number, delayMs = 0) => {
+  const beep = useCallback((frequency: number, durationMs: number, delayMs = 0, peak = 0.3) => {
     if (!optionsRef.current.soundEnabled) return;
     const context = getContext();
     if (!context) return;
@@ -49,7 +49,7 @@ export function useAudioCue({ soundEnabled, vibrationEnabled }: UseAudioCueOptio
     oscillator.type = "sine";
     oscillator.frequency.value = frequency;
     gain.gain.setValueAtTime(0.0001, startAt);
-    gain.gain.exponentialRampToValueAtTime(0.3, startAt + 0.02);
+    gain.gain.exponentialRampToValueAtTime(peak, startAt + 0.02);
     gain.gain.exponentialRampToValueAtTime(0.0001, stopAt);
     oscillator.connect(gain);
     gain.connect(context.destination);
@@ -68,14 +68,21 @@ export function useAudioCue({ soundEnabled, vibrationEnabled }: UseAudioCueOptio
     vibrate([150, 80, 150]);
   }, [beep, vibrate]);
 
-  const cueTick = useCallback(() => {
-    beep(880, 90);
-    vibrate(60);
-  }, [beep, vibrate]);
+  const cueTick = useCallback(
+    (secondsLeft = 0) => {
+      const clamped = Math.min(10, Math.max(1, secondsLeft || 10));
+      const t = (10 - clamped) / 9;
+      beep(880 + t * 440, 90 + t * 70, 0, 0.45 + t * 0.45);
+      if (clamped <= 3) beep(880 + t * 440, 90 + t * 70, 0.13, 0.45 + t * 0.45);
+      vibrate(Math.round(70 + t * 160));
+    },
+    [beep, vibrate]
+  );
 
   const cueGo = useCallback(() => {
-    beep(1320, 350);
-    vibrate(400);
+    beep(1320, 420, 0, 0.95);
+    beep(1660, 260, 140, 0.9);
+    vibrate([300, 120, 300]);
   }, [beep, vibrate]);
 
   return { unlock, cuePrepare, cueTick, cueGo };
