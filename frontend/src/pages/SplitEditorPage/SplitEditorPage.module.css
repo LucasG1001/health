@@ -138,6 +138,10 @@
   opacity: 0.9;
 }
 
+.exerciseRowDone {
+  opacity: 0.55;
+}
+
 .cardMain {
   display: flex;
   align-items: center;
@@ -297,6 +301,19 @@
 .restControlIcon {
   width: 20px;
   height: 20px;
+}
+
+.doneLine {
+  display: flex;
+  align-items: center;
+  padding-top: var(--spacing-sm);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.doneLabel {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
 }
 
 .stepperWrap {

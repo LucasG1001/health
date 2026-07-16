@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
+import { NumericInput } from "../../components/NumericInput/NumericInput";
 import { useProfile } from "../../hooks/useProfile";
 import { ACTIVITY_LABELS, BLOOD_TYPES, formatKcal, formatNumber } from "../../utils/format";
 import { apiErrorMessage } from "../../utils/apiError";
+import { numberToMask, parseMaskedNumber } from "../../utils/numberMask";
 import type { ActivityLevel, BiologicalSex, BloodType, Profile, ProfileInput } from "../../types/profile";
 import styles from "./ProfilePage.module.css";
 
@@ -27,9 +29,7 @@ interface ProfileFormProps {
 }
 
 function ProfileForm({ profile, save }: ProfileFormProps) {
-  const [heightCm, setHeightCm] = useState(
-    profile?.heightCm != null ? String(profile.heightCm).replace(".", ",") : ""
-  );
+  const [heightCm, setHeightCm] = useState(numberToMask(profile?.heightCm));
   const [birthDate, setBirthDate] = useState(profile?.birthDate ?? "");
   const [biologicalSex, setBiologicalSex] = useState<BiologicalSex | "">(profile?.biologicalSex ?? "");
   const [bloodType, setBloodType] = useState<BloodType | "">(profile?.bloodType ?? "");
@@ -48,9 +48,8 @@ function ProfileForm({ profile, save }: ProfileFormProps) {
     setFeedback(null);
     setSaveError(null);
     try {
-      const heightParsed = heightCm.trim() === "" ? null : Number(heightCm.replace(",", "."));
       await save({
-        heightCm: heightParsed != null && !Number.isNaN(heightParsed) ? heightParsed : null,
+        heightCm: parseMaskedNumber(heightCm),
         birthDate: birthDate || null,
         biologicalSex: biologicalSex || null,
         bloodType: bloodType || null,
@@ -82,7 +81,7 @@ function ProfileForm({ profile, save }: ProfileFormProps) {
       <div className={styles.grid}>
         <label className={styles.field}>
           <span className={styles.fieldLabel}>Altura (cm)</span>
-          <input type="text" inputMode="decimal" value={heightCm} onChange={(e) => setHeightCm(e.target.value)} placeholder="175" />
+          <NumericInput value={heightCm} onChange={setHeightCm} placeholder="175,0" />
         </label>
         <label className={styles.field}>
           <span className={styles.fieldLabel}>Data de nascimento</span>

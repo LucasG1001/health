@@ -325,6 +325,24 @@ export function SplitEditorPage() {
     }
   };
 
+  const handleUnconclude = async (exercise: SplitExercise) => {
+    const match = sessionExerciseFor(exercise);
+    if (!match || busy) return;
+    const done = match.sx.sets.filter((s) => s.completedAt !== null);
+    if (done.length === 0) return;
+    setBusy(true);
+    setError(null);
+    try {
+      for (const set of done) {
+        await editSet(set.id, { completed: false });
+      }
+    } catch (err) {
+      setError(apiErrorMessage(err, "Não foi possível reabrir o exercício."));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const removeExercise = async (sxId: string) => {
     if (!split) return;
     setRemovingId(null);
@@ -359,7 +377,14 @@ export function SplitEditorPage() {
     }
   };
 
-  const planList = dragOrder ?? split?.exercises ?? [];
+  const baseList = dragOrder ?? split?.exercises ?? [];
+  const isExerciseDone = (exercise: SplitExercise): boolean => {
+    const match = sessionExerciseFor(exercise);
+    return match ? !hasPendingSets(match.sx) : false;
+  };
+  const planList = inProgress
+    ? [...baseList.filter((e) => !isExerciseDone(e)), ...baseList.filter(isExerciseDone)]
+    : baseList;
   const muscleSummary = split
     ? Array.from(new Set(split.exercises.map((ex) => ex.muscleGroup)))
         .map((group) => MUSCLE_GROUP_LABELS[group])
@@ -420,7 +445,7 @@ export function SplitEditorPage() {
                     }}
                     className={`${styles.exerciseRow} ${dragIndex === index ? styles.exerciseRowDragging : ""} ${
                       isActive ? styles.exerciseRowActive : ""
-                    }`}
+                    } ${done ? styles.exerciseRowDone : ""}`}
                     onPointerDown={inProgress ? undefined : (e) => onRowPointerDown(e, index, planList)}
                   >
                     <div className={styles.cardMain}>
@@ -428,9 +453,9 @@ export function SplitEditorPage() {
                         type="button"
                         className={`${styles.checkCircle} ${done ? styles.checkCircleDone : ""}`}
                         onPointerDown={(e) => e.stopPropagation()}
-                        onClick={() => handleConclude(exercise)}
-                        disabled={!sx || done || busy}
-                        aria-label="Concluir exercício"
+                        onClick={() => (done ? handleUnconclude(exercise) : handleConclude(exercise))}
+                        disabled={!sx || busy}
+                        aria-label={done ? "Reabrir exercício" : "Concluir exercício"}
                       />
                       <button
                         type="button"
@@ -476,21 +501,25 @@ export function SplitEditorPage() {
                       )}
                     </div>
 
-                    <div className={styles.restLine}>
-                      <span className={styles.restTime}>{timeLabel}</span>
-                      <span className={styles.restLabel}>(Descanso entre séries)</span>
-                      {restingHere ? (
-                        <button
-                          type="button"
-                          className={styles.restControl}
-                          onPointerDown={(e) => e.stopPropagation()}
-                          onClick={skipRest}
-                          aria-label="Pular descanso"
-                        >
-                          <StopIcon className={styles.restControlIcon} />
-                        </button>
-                      ) : (
-                        !done && (
+                    {done ? (
+                      <div className={styles.doneLine}>
+                        <span className={styles.doneLabel}>Concluído</span>
+                      </div>
+                    ) : (
+                      <div className={styles.restLine}>
+                        <span className={styles.restTime}>{timeLabel}</span>
+                        <span className={styles.restLabel}>(Descanso entre séries)</span>
+                        {restingHere ? (
+                          <button
+                            type="button"
+                            className={styles.restControl}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={skipRest}
+                            aria-label="Pular descanso"
+                          >
+                            <StopIcon className={styles.restControlIcon} />
+                          </button>
+                        ) : (
                           <button
                             type="button"
                             className={styles.restControl}
@@ -501,9 +530,9 @@ export function SplitEditorPage() {
                           >
                             <PlayIcon className={styles.restControlIcon} />
                           </button>
-                        )
-                      )}
-                    </div>
+                        )}
+                      </div>
+                    )}
 
                     {isActive && total > 0 && (
                       <div className={styles.stepperWrap}>

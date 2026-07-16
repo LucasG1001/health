@@ -2,10 +2,12 @@ import { useEffect, useState, type KeyboardEvent } from "react";
 import { useParams } from "react-router-dom";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { YouTubeEmbed } from "../../components/YouTubeEmbed/YouTubeEmbed";
+import { NumericInput } from "../../components/NumericInput/NumericInput";
 import { updateExercisePlan, fetchSplit } from "../../services/splitService";
 import { updateExercise } from "../../services/exerciseService";
 import { MUSCLE_GROUP_LABELS, formatClock, formatKg, imageFocalStyle, repsTarget } from "../../utils/format";
 import { apiErrorMessage } from "../../utils/apiError";
+import { numberToMask, parseMaskedNumber } from "../../utils/numberMask";
 import type { Split } from "../../types/split";
 import styles from "./WorkoutExerciseDetailPage.module.css";
 
@@ -50,7 +52,7 @@ export function WorkoutExerciseDetailPage() {
           setSeries(String(ex.plannedSets.length || 3));
           setRepsMin(String(ex.plannedSets[0]?.targetRepsMin ?? 12));
           setRepsMax(ex.plannedSets[0]?.targetRepsMax != null ? String(ex.plannedSets[0].targetRepsMax) : "");
-          setWeight(ex.workingWeightKg != null ? String(ex.workingWeightKg).replace(".", ",") : "");
+          setWeight(numberToMask(ex.workingWeightKg));
           setRest(String(ex.restSeconds ?? DEFAULT_REST_SECONDS));
         }
       })
@@ -80,8 +82,7 @@ export function WorkoutExerciseDetailPage() {
     const minValue = parsePositiveInt(repsMin);
     if (seriesValue === null || minValue === null) return;
     const maxValue = repsMax.trim() === "" ? null : parsePositiveInt(repsMax);
-    const weightValue = weight.trim() === "" ? null : Number(weight.replace(",", "."));
-    if (weightValue !== null && Number.isNaN(weightValue)) return;
+    const weightValue = parseMaskedNumber(weight);
     const restValue = parseNonNegativeInt(rest) ?? DEFAULT_REST_SECONDS;
     try {
       if (weightValue !== (planned.workingWeightKg ?? null)) {
@@ -186,14 +187,12 @@ export function WorkoutExerciseDetailPage() {
 
             <div className={`${styles.statCard} ${styles.statCardEditable}`} onClick={() => startEdit("carga")}>
               {editing === "carga" ? (
-                <input
+                <NumericInput
                   className={`${styles.statInput} ${styles.statInputAccent}`}
-                  type="text"
-                  inputMode="decimal"
                   placeholder="—"
                   value={weight}
                   autoFocus
-                  onChange={(e) => setWeight(e.target.value)}
+                  onChange={setWeight}
                   onBlur={saveEdit}
                   onKeyDown={onEditKeyDown}
                   aria-label="Carga em kg"

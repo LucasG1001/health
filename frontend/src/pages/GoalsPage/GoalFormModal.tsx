@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { Modal } from "../../components/Modal/Modal";
+import { NumericInput } from "../../components/NumericInput/NumericInput";
 import { createGoal } from "../../services/goalService";
 import { apiErrorMessage } from "../../utils/apiError";
+import { parseMaskedNumber } from "../../utils/numberMask";
 import { todayIso } from "../../utils/dateUtils";
 import styles from "./GoalFormModal.module.css";
 
@@ -21,15 +23,9 @@ export function GoalFormModal() {
 
   const close = () => navigate("/medidas/metas");
 
-  const parse = (raw: string): number | null => {
-    if (raw.trim() === "") return null;
-    const parsed = Number(raw.replace(",", "."));
-    return Number.isNaN(parsed) ? null : parsed;
-  };
-
   const handleSubmit = async () => {
-    const targetWeightKg = parse(targetWeight);
-    const targetBodyFatPct = parse(targetBodyFat);
+    const targetWeightKg = parseMaskedNumber(targetWeight);
+    const targetBodyFatPct = parseMaskedNumber(targetBodyFat);
     if (targetWeightKg == null && targetBodyFatPct == null) {
       setError("Defina um peso alvo e/ou um % de gordura alvo.");
       return;
@@ -51,11 +47,11 @@ export function GoalFormModal() {
       {error && <p className={styles.error}>{error}</p>}
       <label className={styles.field}>
         <span className={styles.fieldLabel}>Peso alvo (kg)</span>
-        <input type="text" inputMode="decimal" value={targetWeight} onChange={(e) => setTargetWeight(e.target.value)} placeholder="Ex: 78" />
+        <NumericInput value={targetWeight} onChange={setTargetWeight} placeholder="Ex: 78,0" />
       </label>
       <label className={styles.field}>
         <span className={styles.fieldLabel}>% de gordura alvo</span>
-        <input type="text" inputMode="decimal" value={targetBodyFat} onChange={(e) => setTargetBodyFat(e.target.value)} placeholder="Ex: 15" />
+        <NumericInput value={targetBodyFat} onChange={setTargetBodyFat} placeholder="Ex: 15,0" />
       </label>
       <label className={styles.field}>
         <span className={styles.fieldLabel}>Data prevista</span>

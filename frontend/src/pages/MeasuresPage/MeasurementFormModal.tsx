@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { useNavigate, useOutletContext, useParams } from "react-router-dom";
 import { Modal } from "../../components/Modal/Modal";
+import { NumericInput } from "../../components/NumericInput/NumericInput";
 import { createMeasurement, updateMeasurement } from "../../services/measurementService";
 import { todayIso } from "../../utils/dateUtils";
 import { apiErrorMessage } from "../../utils/apiError";
+import { numberToMask, parseMaskedNumber } from "../../utils/numberMask";
 import type { Measurement } from "../../types/measurement";
 import styles from "./MeasurementFormModal.module.css";
 
@@ -38,8 +40,7 @@ export function MeasurementFormModal() {
   const [values, setValues] = useState<Record<NumericField["key"], string>>(() => {
     const initial = {} as Record<NumericField["key"], string>;
     for (const field of FIELDS) {
-      const current = editing?.[field.key];
-      initial[field.key] = current != null ? String(current).replace(".", ",") : "";
+      initial[field.key] = numberToMask(editing?.[field.key]);
     }
     return initial;
   });
@@ -49,24 +50,18 @@ export function MeasurementFormModal() {
 
   const close = () => navigate("/medidas");
 
-  const parseField = (raw: string): number | null => {
-    if (raw.trim() === "") return null;
-    const parsed = Number(raw.replace(",", "."));
-    return Number.isNaN(parsed) ? null : parsed;
-  };
-
   const handleSubmit = async () => {
     setSaving(true);
     setError(null);
     const payload = {
       measuredOn,
-      weightKg: parseField(values.weightKg),
-      bodyFatPct: parseField(values.bodyFatPct),
-      waistCm: parseField(values.waistCm),
-      hipCm: parseField(values.hipCm),
-      armCm: parseField(values.armCm),
-      thighCm: parseField(values.thighCm),
-      chestCm: parseField(values.chestCm),
+      weightKg: parseMaskedNumber(values.weightKg),
+      bodyFatPct: parseMaskedNumber(values.bodyFatPct),
+      waistCm: parseMaskedNumber(values.waistCm),
+      hipCm: parseMaskedNumber(values.hipCm),
+      armCm: parseMaskedNumber(values.armCm),
+      thighCm: parseMaskedNumber(values.thighCm),
+      chestCm: parseMaskedNumber(values.chestCm),
       notes: notes.trim() || null,
     };
     try {
@@ -101,12 +96,10 @@ export function MeasurementFormModal() {
             <span className={styles.fieldLabel}>
               {field.label} {field.unit && <em className={styles.unit}>({field.unit})</em>}
             </span>
-            <input
-              type="text"
-              inputMode="decimal"
+            <NumericInput
               placeholder="—"
               value={values[field.key]}
-              onChange={(e) => setValues((prev) => ({ ...prev, [field.key]: e.target.value }))}
+              onChange={(masked) => setValues((prev) => ({ ...prev, [field.key]: masked }))}
             />
           </label>
         ))}
