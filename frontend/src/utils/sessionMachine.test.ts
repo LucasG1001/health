@@ -109,6 +109,90 @@ describe("sessionReducer", () => {
     expect(state.restEndsAt).toBeNull();
   });
 
+  it("vai para interRest ao concluir o exercício quando há próximo e interRestMs", () => {
+    let state = startedState();
+    state = sessionReducer(state, {
+      type: "COMPLETE_SET",
+      set: makeSet("set-1", true),
+      restMs: 60000,
+      now: 0,
+    });
+    state = sessionReducer(state, { type: "SKIP_REST" });
+    const now = 5000;
+    state = sessionReducer(state, {
+      type: "COMPLETE_SET",
+      set: makeSet("set-2", true),
+      restMs: 60000,
+      interRestMs: 90000,
+      now,
+    });
+    expect(state.phase).toBe("interRest");
+    expect(state.restEndsAt).toBe(now + 90000);
+    expect(state.restTotalMs).toBe(90000);
+    expect(state.currentExerciseIndex).toBe(0);
+  });
+
+  it("vai para exerciseDone (não interRest) no último exercício mesmo com interRestMs", () => {
+    const session = makeSession();
+    session.exercises[0]!.sets = [makeSet("set-1", true), makeSet("set-2", true)];
+    let state = sessionReducer(initialSessionState, { type: "START", session });
+    state = sessionReducer(state, { type: "PLAY_EXERCISE", exerciseIndex: 1 });
+    state = sessionReducer(state, {
+      type: "COMPLETE_SET",
+      set: makeSet("set-3", true),
+      restMs: 60000,
+      interRestMs: 90000,
+      now: 0,
+    });
+    expect(state.phase).toBe("exerciseDone");
+    expect(state.restEndsAt).toBeNull();
+  });
+
+  it("EXTEND_REST soma 15s durante o interRest", () => {
+    let state = startedState();
+    state = sessionReducer(state, {
+      type: "COMPLETE_SET",
+      set: makeSet("set-1", true),
+      restMs: 60000,
+      now: 0,
+    });
+    state = sessionReducer(state, { type: "SKIP_REST" });
+    state = sessionReducer(state, {
+      type: "COMPLETE_SET",
+      set: makeSet("set-2", true),
+      restMs: 60000,
+      interRestMs: 90000,
+      now: 1000,
+    });
+    state = sessionReducer(state, { type: "EXTEND_REST", ms: 15000 });
+    expect(state.phase).toBe("interRest");
+    expect(state.restEndsAt).toBe(1000 + 90000 + 15000);
+    expect(state.restTotalMs).toBe(105000);
+  });
+
+  it("NEXT_EXERCISE a partir do interRest avança para o próximo exercício", () => {
+    let state = startedState();
+    state = sessionReducer(state, {
+      type: "COMPLETE_SET",
+      set: makeSet("set-1", true),
+      restMs: 60000,
+      now: 0,
+    });
+    state = sessionReducer(state, { type: "SKIP_REST" });
+    state = sessionReducer(state, {
+      type: "COMPLETE_SET",
+      set: makeSet("set-2", true),
+      restMs: 60000,
+      interRestMs: 90000,
+      now: 0,
+    });
+    expect(state.phase).toBe("interRest");
+    state = sessionReducer(state, { type: "NEXT_EXERCISE" });
+    expect(state.phase).toBe("exercising");
+    expect(state.currentExerciseIndex).toBe(1);
+    expect(state.restEndsAt).toBeNull();
+  });
+
   it("REST_ENDED libera a próxima série pendente", () => {
     let state = startedState();
     state = sessionReducer(state, {

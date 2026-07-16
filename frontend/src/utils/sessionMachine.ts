@@ -1,6 +1,6 @@
 import type { SessionExercise, SessionSet, WorkoutSession } from "../types/session";
 
-export type SessionPhase = "idle" | "overview" | "exercising" | "resting" | "exerciseDone";
+export type SessionPhase = "idle" | "overview" | "exercising" | "resting" | "interRest" | "exerciseDone";
 
 export interface SessionState {
   session: WorkoutSession | null;
@@ -26,7 +26,7 @@ export type SessionAction =
   | { type: "HYDRATE"; session: WorkoutSession; snapshot: SessionSnapshot | null }
   | { type: "START"; session: WorkoutSession }
   | { type: "PLAY_EXERCISE"; exerciseIndex: number }
-  | { type: "COMPLETE_SET"; set: SessionSet; restMs: number; now: number }
+  | { type: "COMPLETE_SET"; set: SessionSet; restMs: number; interRestMs?: number; now: number }
   | { type: "REST_ENDED" }
   | { type: "SKIP_REST" }
   | { type: "EXTEND_REST"; ms: number }
@@ -156,6 +156,17 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
       const exercise = session.exercises[state.currentExerciseIndex];
       if (!exercise) return { ...state, session };
       if (!hasPendingSets(exercise)) {
+        const next = nextExerciseIndex(session, state.currentExerciseIndex);
+        if (next !== null && action.interRestMs && action.interRestMs > 0) {
+          return {
+            ...state,
+            session,
+            phase: "interRest",
+            restEndsAt: action.now + action.interRestMs,
+            restTotalMs: action.interRestMs,
+            prepareCued: false,
+          };
+        }
         return {
           ...state,
           session,
@@ -193,7 +204,7 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
     }
 
     case "EXTEND_REST": {
-      if (state.phase !== "resting" || state.restEndsAt === null) return state;
+      if ((state.phase !== "resting" && state.phase !== "interRest") || state.restEndsAt === null) return state;
       return {
         ...state,
         restEndsAt: state.restEndsAt + action.ms,

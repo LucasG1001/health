@@ -75,6 +75,7 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
       rpe?: number | null;
       rir?: number | null;
       restMs: number;
+      interRestMs?: number;
     }) => {
       const set = await sessionService.updateSessionSet(input.setId, {
         weightKg: input.weightKg,
@@ -83,7 +84,13 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
         rir: input.rir ?? null,
         completed: true,
       });
-      dispatch({ type: "COMPLETE_SET", set, restMs: input.restMs, now: Date.now() });
+      dispatch({
+        type: "COMPLETE_SET",
+        set,
+        restMs: input.restMs,
+        interRestMs: input.interRestMs,
+        now: Date.now(),
+      });
     },
     []
   );

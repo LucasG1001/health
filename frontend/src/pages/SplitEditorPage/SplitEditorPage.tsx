@@ -6,6 +6,7 @@ import { Modal } from "../../components/Modal/Modal";
 import { ConfirmDialog } from "../../components/ConfirmDialog/ConfirmDialog";
 import { DayOfWeekPicker } from "../../components/DayOfWeekPicker/DayOfWeekPicker";
 import { SetStepper } from "../../components/SetStepper/SetStepper";
+import { InterRestModal } from "../../components/InterRestModal/InterRestModal";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -23,8 +24,10 @@ import { useNow } from "../../hooks/useNow";
 import { useRestTimer } from "../../hooks/useRestTimer";
 import { useAudioCue } from "../../hooks/useAudioCue";
 import { useWakeLock } from "../../hooks/useWakeLock";
-import { hasPendingSets } from "../../utils/sessionMachine";
+import { hasPendingSets, nextExerciseIndex } from "../../utils/sessionMachine";
 import { createSplit, fetchSplit, replaceSplitExercises, updateSplit } from "../../services/splitService";
+import { updateExercise } from "../../services/exerciseService";
+import { numberToMask, parseMaskedNumber } from "../../utils/numberMask";
 import {
   MUSCLE_GROUP_LABELS,
   formatClock,
@@ -63,8 +66,18 @@ export function SplitEditorPage() {
   const navigate = useNavigate();
   const { exercises: catalog } = useExercises();
   const { settings } = useSettings();
-  const { state, start, playExercise, completeSet, skipRest, restEnded, finish, editSet } =
-    useWorkoutSession();
+  const {
+    state,
+    start,
+    playExercise,
+    completeSet,
+    skipRest,
+    restEnded,
+    finish,
+    editSet,
+    extendRest,
+    nextExercise,
+  } = useWorkoutSession();
 
   const session = state.session;
   const inProgress = session !== null && session.status === "in_progress" && session.splitId === id;
@@ -299,6 +312,7 @@ export function SplitEditorPage() {
         weightKg: pending.weightKg ?? exercise.workingWeightKg ?? null,
         reps: pending.reps ?? pending.targetRepsMin ?? 1,
         restMs: restMsFor(pending),
+        interRestMs: restMsFor(pending),
       });
     } catch (err) {
       setError(apiErrorMessage(err, "Não foi possível iniciar a série."));
@@ -341,6 +355,38 @@ export function SplitEditorPage() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const handleInterRestAdvance = async (weightMasked: string) => {
+    const finishedSx = session?.exercises[state.currentExerciseIndex] ?? null;
+    const finishedSplitEx = finishedSx
+      ? split?.exercises.find((e) => e.exerciseId === finishedSx.exerciseId) ?? null
+      : null;
+    const parsed = parseMaskedNumber(weightMasked);
+    if (finishedSplitEx && finishedSx && parsed !== (finishedSplitEx.workingWeightKg ?? null)) {
+      setBusy(true);
+      try {
+        await updateExercise(finishedSplitEx.exerciseId, { workingWeightKg: parsed });
+        setSplit((prev) =>
+          prev
+            ? {
+                ...prev,
+                exercises: prev.exercises.map((e) =>
+                  e.exerciseId === finishedSplitEx.exerciseId ? { ...e, workingWeightKg: parsed } : e
+                ),
+              }
+            : prev
+        );
+        for (const set of finishedSx.sets) {
+          if (set.completedAt !== null) await editSet(set.id, { weightKg: parsed });
+        }
+      } catch (err) {
+        setError(apiErrorMessage(err, "Não foi possível salvar a carga."));
+      } finally {
+        setBusy(false);
+      }
+    }
+    nextExercise();
   };
 
   const removeExercise = async (sxId: string) => {
@@ -391,6 +437,14 @@ export function SplitEditorPage() {
         .join(" · ")
     : "";
   const elapsedMs = inProgress && session ? now - new Date(session.startedAt).getTime() : 0;
+
+  const interRestActive = inProgress && session !== null && state.phase === "interRest";
+  const finishedSx = interRestActive ? session!.exercises[state.currentExerciseIndex] ?? null : null;
+  const finishedSplitEx = finishedSx
+    ? split?.exercises.find((e) => e.exerciseId === finishedSx.exerciseId) ?? null
+    : null;
+  const nextIdx = interRestActive ? nextExerciseIndex(session!, state.currentExerciseIndex) : null;
+  const nextSx = nextIdx !== null ? session!.exercises[nextIdx] ?? null : null;
 
   return (
     <div className={styles.page}>
@@ -632,6 +686,22 @@ export function SplitEditorPage() {
             <DayOfWeekPicker value={editWeekdays} onChange={setEditWeekdays} />
           </div>
         </Modal>
+      )}
+
+      {interRestActive && finishedSx && nextSx && (
+        <InterRestModal
+          endsAt={state.restEndsAt}
+          totalMs={state.restTotalMs}
+          finishedName={finishedSx.exerciseName}
+          nextName={nextSx.exerciseName}
+          nextImageUrl={nextSx.imageUrl}
+          initialWeight={numberToMask(finishedSplitEx?.workingWeightKg)}
+          onCueTick={cueTick}
+          onCueEnd={cueGo}
+          onExtend={extendRest}
+          onAdvance={handleInterRestAdvance}
+          saving={busy}
+        />
       )}
 
       {removingId && (

@@ -15,6 +15,7 @@ export interface WorkoutSessionContextValue {
     rpe?: number | null;
     rir?: number | null;
     restMs: number;
+    interRestMs?: number;
   }) => Promise<void>;
   skipRest: () => void;
   extendRest: () => void;
