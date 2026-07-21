@@ -24,7 +24,7 @@ import { useNow } from "../../hooks/useNow";
 import { useRestTimer } from "../../hooks/useRestTimer";
 import { useAudioCue } from "../../hooks/useAudioCue";
 import { useWakeLock } from "../../hooks/useWakeLock";
-import { hasPendingSets, nextExerciseIndex } from "../../utils/sessionMachine";
+import { hasPendingSets } from "../../utils/sessionMachine";
 import { createSplit, fetchSplit, replaceSplitExercises, updateSplit } from "../../services/splitService";
 import { updateExercise } from "../../services/exerciseService";
 import { numberToMask, parseMaskedNumber } from "../../utils/numberMask";
@@ -76,7 +76,7 @@ export function SplitEditorPage() {
     finish,
     editSet,
     extendRest,
-    nextExercise,
+    backToOverview,
   } = useWorkoutSession();
 
   const session = state.session;
@@ -357,36 +357,39 @@ export function SplitEditorPage() {
     }
   };
 
-  const handleInterRestAdvance = async (weightMasked: string) => {
+  const commitInterRestWeight = async (weightMasked: string) => {
     const finishedSx = session?.exercises[state.currentExerciseIndex] ?? null;
     const finishedSplitEx = finishedSx
       ? split?.exercises.find((e) => e.exerciseId === finishedSx.exerciseId) ?? null
       : null;
     const parsed = parseMaskedNumber(weightMasked);
-    if (finishedSplitEx && finishedSx && parsed !== (finishedSplitEx.workingWeightKg ?? null)) {
-      setBusy(true);
-      try {
-        await updateExercise(finishedSplitEx.exerciseId, { workingWeightKg: parsed });
-        setSplit((prev) =>
-          prev
-            ? {
-                ...prev,
-                exercises: prev.exercises.map((e) =>
-                  e.exerciseId === finishedSplitEx.exerciseId ? { ...e, workingWeightKg: parsed } : e
-                ),
-              }
-            : prev
-        );
-        for (const set of finishedSx.sets) {
-          if (set.completedAt !== null) await editSet(set.id, { weightKg: parsed });
-        }
-      } catch (err) {
-        setError(apiErrorMessage(err, "Não foi possível salvar a carga."));
-      } finally {
-        setBusy(false);
+    if (!finishedSplitEx || !finishedSx || parsed === (finishedSplitEx.workingWeightKg ?? null)) return;
+    setBusy(true);
+    try {
+      await updateExercise(finishedSplitEx.exerciseId, { workingWeightKg: parsed });
+      setSplit((prev) =>
+        prev
+          ? {
+              ...prev,
+              exercises: prev.exercises.map((e) =>
+                e.exerciseId === finishedSplitEx.exerciseId ? { ...e, workingWeightKg: parsed } : e
+              ),
+            }
+          : prev
+      );
+      for (const set of finishedSx.sets) {
+        if (set.completedAt !== null) await editSet(set.id, { weightKg: parsed });
       }
+    } catch (err) {
+      setError(apiErrorMessage(err, "Não foi possível salvar a carga."));
+    } finally {
+      setBusy(false);
     }
-    nextExercise();
+  };
+
+  const handleInterRestDone = async (weightMasked: string) => {
+    await commitInterRestWeight(weightMasked);
+    backToOverview();
   };
 
   const removeExercise = async (sxId: string) => {
@@ -443,8 +446,6 @@ export function SplitEditorPage() {
   const finishedSplitEx = finishedSx
     ? split?.exercises.find((e) => e.exerciseId === finishedSx.exerciseId) ?? null
     : null;
-  const nextIdx = interRestActive ? nextExerciseIndex(session!, state.currentExerciseIndex) : null;
-  const nextSx = nextIdx !== null ? session!.exercises[nextIdx] ?? null : null;
 
   return (
     <div className={styles.page}>
@@ -688,18 +689,17 @@ export function SplitEditorPage() {
         </Modal>
       )}
 
-      {interRestActive && finishedSx && nextSx && (
+      {interRestActive && finishedSx && (
         <InterRestModal
           endsAt={state.restEndsAt}
           totalMs={state.restTotalMs}
           finishedName={finishedSx.exerciseName}
-          nextName={nextSx.exerciseName}
-          nextImageUrl={nextSx.imageUrl}
           initialWeight={numberToMask(finishedSplitEx?.workingWeightKg)}
           onCueTick={cueTick}
           onCueEnd={cueGo}
           onExtend={extendRest}
-          onAdvance={handleInterRestAdvance}
+          onCommitWeight={commitInterRestWeight}
+          onDone={handleInterRestDone}
           saving={busy}
         />
       )}
