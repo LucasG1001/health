@@ -2,16 +2,24 @@ import { useMemo, useRef, useState } from "react";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { EmptyState } from "../../components/EmptyState/EmptyState";
 import { CameraIcon, ChevronLeftIcon, ChevronRightIcon } from "../../components/Icon/icons";
+import { ErrorBanner } from "../../components/ErrorBanner/ErrorBanner";
+import { Loading } from "../../components/Loading/Loading";
+import { SegmentedControl } from "../../components/SegmentedControl/SegmentedControl";
+import { PoseSelector } from "../../components/PoseSelector/PoseSelector";
 import { usePhotos } from "../../hooks/usePhotos";
 import { useMeasurements } from "../../hooks/useMeasurements";
 import { diffDays } from "../../utils/dateUtils";
-import { formatDate, formatKg, formatNumber, formatPct } from "../../utils/format";
+import { POSE_LABELS, formatDate, formatKg, formatNumber, formatPct } from "../../utils/format";
 import type { PhotoPose, ProgressPhoto } from "../../types/photo";
 import type { Measurement } from "../../types/measurement";
-import { POSE_LABELS } from "../../utils/format";
 import styles from "./PhotoComparePage.module.css";
 
 type Mode = "side" | "overlay";
+
+const MODE_OPTIONS: { value: Mode; label: string }[] = [
+  { value: "side", label: "Lado a lado" },
+  { value: "overlay", label: "Sobrepor" },
+];
 
 function nearestMeasurement(measurements: Measurement[], date: string): Measurement | null {
   if (measurements.length === 0) return null;
@@ -68,7 +76,7 @@ function PhotoPicker({
 }
 
 export function PhotoComparePage() {
-  const { photos, loading } = usePhotos();
+  const { photos, loading, error, reload } = usePhotos();
   const { measurements } = useMeasurements();
   const [pose, setPose] = useState<PhotoPose>("front");
   const [mode, setMode] = useState<Mode>("side");
@@ -118,39 +126,17 @@ export function PhotoComparePage() {
         title="Comparar fotos"
         backTo="/medidas/fotos"
         actions={
-          <div className={styles.modeToggle}>
-            <button
-              type="button"
-              className={`${styles.modeOption} ${mode === "side" ? styles.modeActive : ""}`}
-              onClick={() => setMode("side")}
-            >
-              Lado a lado
-            </button>
-            <button
-              type="button"
-              className={`${styles.modeOption} ${mode === "overlay" ? styles.modeActive : ""}`}
-              onClick={() => setMode("overlay")}
-            >
-              Sobrepor
-            </button>
-          </div>
+          <SegmentedControl label="Modo de comparação" value={mode} options={MODE_OPTIONS} onChange={setMode} />
         }
       />
 
-      <div className={styles.poseRow}>
-        {(Object.keys(POSE_LABELS) as PhotoPose[]).map((option) => (
-          <button
-            key={option}
-            type="button"
-            className={`${styles.poseChip} ${pose === option ? styles.poseActive : ""}`}
-            onClick={() => changePose(option)}
-          >
-            {POSE_LABELS[option]}
-          </button>
-        ))}
-      </div>
+      <PoseSelector value={pose} onChange={changePose} />
 
-      {!loading && poseFiltered.length < 2 ? (
+      {error && <ErrorBanner message={error} onRetry={reload} />}
+
+      {loading ? (
+        <Loading />
+      ) : error ? null : poseFiltered.length < 2 ? (
         <EmptyState
           icon={<CameraIcon />}
           title="Fotos insuficientes"

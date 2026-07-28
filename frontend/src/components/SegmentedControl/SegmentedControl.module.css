@@ -24,7 +24,7 @@
 .active,
 .active:hover {
   background: var(--color-accent);
-  color: #fff;
+  color: var(--color-on-accent);
 }
 
 @media (max-width: 480px) {

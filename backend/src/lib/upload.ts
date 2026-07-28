@@ -60,22 +60,6 @@ const EXT_BY_CONTENT_TYPE: Record<string, string> = {
   "image/gif": ".gif",
 };
 
-export async function downloadToUploads(subdir: UploadSubdir, url: string): Promise<string | null> {
-  try {
-    const response = await fetch(url);
-    if (!response.ok) return null;
-    const contentType = response.headers.get("content-type")?.split(";")[0]?.trim() ?? "";
-    const ext = EXT_BY_CONTENT_TYPE[contentType];
-    if (!ext) return null;
-    const buffer = Buffer.from(await response.arrayBuffer());
-    if (buffer.byteLength === 0 || buffer.byteLength > MAX_FILE_SIZE) return null;
-    const filename = `${randomUUID()}${ext}`;
-    await fs.promises.writeFile(path.join(UPLOAD_DIR, subdir, filename), buffer);
-    return relativeUploadPath(subdir, filename);
-  } catch {
-    return null;
-  }
-}
 
 export async function removeUploadedFile(filePath: string | null): Promise<void> {
   if (!filePath) return;

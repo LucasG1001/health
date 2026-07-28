@@ -117,7 +117,7 @@
 
 .toggle:checked::after {
   transform: translateX(20px);
-  background: #fff;
+  background: var(--color-on-accent);
 }
 
 .errorText {
@@ -135,7 +135,7 @@
   padding: 12px 28px;
   border-radius: var(--radius-md);
   background: var(--color-accent);
-  color: #fff;
+  color: var(--color-on-accent);
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-semibold);
   transition: background var(--transition-fast), opacity var(--transition-fast);

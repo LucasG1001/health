@@ -7,55 +7,6 @@
   gap: var(--spacing-lg);
 }
 
-.modeToggle {
-  display: inline-flex;
-  background: var(--color-bg-tertiary);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-full);
-  padding: 3px;
-  gap: 2px;
-}
-
-.modeOption {
-  padding: 6px 12px;
-  border-radius: var(--radius-full);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-secondary);
-  white-space: nowrap;
-  transition: color var(--transition-fast), background var(--transition-fast);
-}
-
-.modeActive,
-.modeActive:hover {
-  background: var(--color-accent);
-  color: #fff;
-}
-
-.poseRow {
-  display: flex;
-  gap: var(--spacing-sm);
-}
-
-.poseChip {
-  flex: 1;
-  min-height: 40px;
-  border-radius: var(--radius-md);
-  background: var(--color-bg-tertiary);
-  border: 1px solid var(--color-border);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-medium);
-  transition: color var(--transition-fast), background var(--transition-fast), border-color var(--transition-fast);
-}
-
-.poseActive,
-.poseActive:hover {
-  background: var(--color-accent-subtle);
-  border-color: var(--color-accent);
-  color: var(--color-accent);
-}
-
 .pickers {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -193,7 +144,7 @@
   background: rgba(0, 0, 0, 0.55);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
-  color: #fff;
+  color: var(--color-on-accent);
 }
 
 .tagLeft {

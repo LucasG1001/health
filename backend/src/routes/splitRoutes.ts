@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { requireUuid } from "../middleware/requireUuid.js";
 import {
   getAll,
   getById,
@@ -11,14 +12,15 @@ import {
 } from "../controllers/splitController.js";
 
 const router = Router();
+const withId = requireUuid("id");
 
 router.get("/", getAll);
 router.post("/", create);
 router.post("/reorder", reorder);
-router.get("/:id", getById);
-router.put("/:id", update);
-router.put("/:id/exercises", replaceExercises);
-router.put("/:id/exercises/:splitExerciseId", updateExercisePlan);
-router.delete("/:id", remove);
+router.get("/:id", withId, getById);
+router.put("/:id", withId, update);
+router.put("/:id/exercises", withId, replaceExercises);
+router.put("/:id/exercises/:splitExerciseId", requireUuid("id", "splitExerciseId"), updateExercisePlan);
+router.delete("/:id", withId, remove);
 
 export { router as splitRoutes };

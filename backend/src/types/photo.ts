@@ -1,4 +1,6 @@
-export type PhotoPose = "front" | "side" | "back";
+export const PHOTO_POSES = ["front", "side", "back"] as const;
+
+export type PhotoPose = (typeof PHOTO_POSES)[number];
 
 export interface PhotoRow {
   id: string;

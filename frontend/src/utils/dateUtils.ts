@@ -14,6 +14,3 @@ export function diffDays(fromIso: string, toIso: string): number {
   return Math.round((to - from) / 86400000);
 }
 
-export function currentWeekday(): number {
-  return new Date().getDay();
-}

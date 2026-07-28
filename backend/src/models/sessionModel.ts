@@ -1,6 +1,9 @@
-import { pool } from "../database/connection.js";
+import { pool, rollback } from "../database/connection.js";
+import { APP_TIMEZONE } from "../lib/dateUtils.js";
+import { buildUpdateSet } from "../lib/sqlUpdate.js";
 import { resolveImageUrl } from "./exerciseModel.js";
-import { ActiveSessionExistsError, DomainError } from "./errors.js";
+import { isUniqueViolation } from "../lib/pgError.js";
+import { ActiveSessionExistsError, DomainError, SessionAlreadyFinishedError } from "./errors.js";
 import type {
   SessionExercise,
   SessionExerciseRow,
@@ -13,8 +16,6 @@ import type {
   WorkoutSession,
 } from "../types/session.js";
 import type { SetType, SetVariation } from "../types/split.js";
-
-const UNIQUE_VIOLATION = "23505";
 
 function toSet(row: SessionSetRow): SessionSet {
   return {
@@ -116,13 +117,20 @@ export async function list(filters: {
 }): Promise<SessionSummaryItem[]> {
   const conditions: string[] = [];
   const values: unknown[] = [];
+  // started_at é TIMESTAMPTZ: comparar ::date direto usa o fuso do servidor (UTC no
+  // container) e desloca treinos da noite para o dia seguinte.
+  const startedDate = (index: number) => `(ws.started_at AT TIME ZONE $${index})::date`;
+  if (filters.from || filters.to) {
+    values.push(APP_TIMEZONE);
+  }
+  const tzIndex = values.length;
   if (filters.from) {
     values.push(filters.from);
-    conditions.push(`ws.started_at::date >= $${values.length}`);
+    conditions.push(`${startedDate(tzIndex)} >= $${values.length}`);
   }
   if (filters.to) {
     values.push(filters.to);
-    conditions.push(`ws.started_at::date <= $${values.length}`);
+    conditions.push(`${startedDate(tzIndex)} <= $${values.length}`);
   }
   if (filters.status) {
     values.push(filters.status);
@@ -168,12 +176,8 @@ interface StartPlanRow {
   exercise_working_weight_kg: number | null;
   set_id: string | null;
   set_position: number | null;
-  set_type: SetType | null;
-  variation: SetVariation | null;
   target_reps_min: number | null;
   target_reps_max: number | null;
-  suggested_weight_kg: number | null;
-  set_rest_seconds: number | null;
 }
 
 export async function start(splitId: string): Promise<WorkoutSession> {
@@ -189,9 +193,8 @@ export async function start(splitId: string): Promise<WorkoutSession> {
     `SELECT se.id AS split_exercise_id, se.exercise_id, e.name AS exercise_name,
             se.position AS exercise_position, se.rest_seconds AS exercise_rest_seconds,
             e.working_weight_kg AS exercise_working_weight_kg,
-            ps.id AS set_id, ps.position AS set_position, ps.set_type, ps.variation,
-            ps.target_reps_min, ps.target_reps_max, ps.suggested_weight_kg,
-            ps.rest_seconds AS set_rest_seconds
+            ps.id AS set_id, ps.position AS set_position,
+            ps.target_reps_min, ps.target_reps_max
        FROM split_exercises se
        JOIN exercises e ON e.id = se.exercise_id
        LEFT JOIN planned_sets ps ON ps.split_exercise_id = se.id
@@ -234,18 +237,18 @@ export async function start(splitId: string): Promise<WorkoutSession> {
       for (let i = 0; i < plannedSets.length; i++) {
         const set = plannedSets[i]!;
         await client.query(
+          // Séries planejadas não têm tipo nem carga própria: toda série materializada é
+          // de trabalho, com o descanso do exercício e a carga do catálogo.
           `INSERT INTO session_sets
-             (session_exercise_id, position, set_type, variation, target_reps_min, target_reps_max, rest_seconds, weight_kg)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+             (session_exercise_id, position, target_reps_min, target_reps_max, rest_seconds, weight_kg)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
           [
             sessionExerciseId,
             i,
-            set.set_type,
-            set.variation,
             set.target_reps_min,
             set.target_reps_max,
-            set.set_rest_seconds ?? set.exercise_rest_seconds,
-            set.exercise_working_weight_kg ?? set.suggested_weight_kg,
+            set.exercise_rest_seconds,
+            set.exercise_working_weight_kg,
           ]
         );
       }
@@ -253,17 +256,16 @@ export async function start(splitId: string): Promise<WorkoutSession> {
 
     await client.query("COMMIT");
   } catch (error) {
-    await client.query("ROLLBACK");
-    if (error instanceof Error && "code" in error && error.code === UNIQUE_VIOLATION) {
-      throw new ActiveSessionExistsError();
-    }
+    await rollback(client);
+    if (isUniqueViolation(error)) throw new ActiveSessionExistsError();
     throw error;
   } finally {
     client.release();
   }
 
   const created = await findById(sessionId);
-  return created!;
+  if (!created) throw new DomainError("Treino não encontrado.", 404);
+  return created;
 }
 
 export async function updateNotes(id: string, notes: string | null): Promise<boolean> {
@@ -294,24 +296,66 @@ export async function addExercise(sessionId: string, exerciseId: string): Promis
     throw new DomainError("Exercício não encontrado.", 404);
   }
 
-  const inserted = await pool.query<{ id: string }>(
-    `INSERT INTO session_exercises (session_id, exercise_id, exercise_name, position)
-     VALUES ($1, $2, $3,
-       (SELECT COALESCE(MAX(position), -1) + 1 FROM session_exercises WHERE session_id = $1))
-     RETURNING id`,
-    [sessionId, exerciseId, exercise.rows[0].name]
-  );
-  const sessionExerciseId = inserted.rows[0]!.id;
-
-  for (let i = 0; i < 3; i++) {
-    await pool.query(
-      `INSERT INTO session_sets (session_exercise_id, position, set_type, variation)
-       VALUES ($1, $2, 'working', 'normal')`,
-      [sessionExerciseId, i]
+  // Os 4 inserts precisam ser atômicos: em conexões separadas uma falha no meio deixava
+  // um exercício de sessão com menos séries do que deveria, sem rollback.
+  const client = await pool.connect();
+  let sessionExerciseId: string;
+  try {
+    await client.query("BEGIN");
+    const inserted = await client.query<{ id: string }>(
+      `INSERT INTO session_exercises (session_id, exercise_id, exercise_name, position)
+       VALUES ($1, $2, $3,
+         (SELECT COALESCE(MAX(position), -1) + 1 FROM session_exercises WHERE session_id = $1))
+       RETURNING id`,
+      [sessionId, exerciseId, exercise.rows[0].name]
     );
+    sessionExerciseId = inserted.rows[0]!.id;
+
+    for (let position = 0; position < 3; position++) {
+      await client.query(
+        `INSERT INTO session_sets (session_exercise_id, position, set_type, variation)
+         VALUES ($1, $2, 'working', 'normal')`,
+        [sessionExerciseId, position]
+      );
+    }
+    await client.query("COMMIT");
+  } catch (error) {
+    await rollback(client);
+    throw error;
+  } finally {
+    client.release();
   }
 
   return findExercise(sessionExerciseId);
+}
+
+/**
+ * Séries de um treino já finalizado não podem mudar: `total_volume_kg` e a duração ficam
+ * congelados no finish e passariam a divergir das linhas para sempre.
+ */
+async function assertEditableByExercise(sessionExerciseId: string): Promise<void> {
+  const result = await pool.query<{ status: SessionStatus }>(
+    `SELECT ws.status
+       FROM session_exercises se
+       JOIN workout_sessions ws ON ws.id = se.session_id
+      WHERE se.id = $1`,
+    [sessionExerciseId]
+  );
+  const status = result.rows[0]?.status;
+  if (status !== undefined && status !== "in_progress") throw new SessionAlreadyFinishedError();
+}
+
+async function assertEditableBySet(setId: string): Promise<void> {
+  const result = await pool.query<{ status: SessionStatus }>(
+    `SELECT ws.status
+       FROM session_sets ss
+       JOIN session_exercises se ON se.id = ss.session_exercise_id
+       JOIN workout_sessions ws ON ws.id = se.session_id
+      WHERE ss.id = $1`,
+    [setId]
+  );
+  const status = result.rows[0]?.status;
+  if (status !== undefined && status !== "in_progress") throw new SessionAlreadyFinishedError();
 }
 
 async function findExercise(sessionExerciseId: string): Promise<SessionExercise | null> {
@@ -333,17 +377,11 @@ async function findExercise(sessionExerciseId: string): Promise<SessionExercise 
 }
 
 export async function removeExercise(sessionExerciseId: string): Promise<boolean> {
+  await assertEditableByExercise(sessionExerciseId);
   const result = await pool.query("DELETE FROM session_exercises WHERE id = $1", [sessionExerciseId]);
   return (result.rowCount ?? 0) > 0;
 }
 
-export async function updateExerciseNotes(sessionExerciseId: string, notes: string | null): Promise<boolean> {
-  const result = await pool.query("UPDATE session_exercises SET notes = $2 WHERE id = $1", [
-    sessionExerciseId,
-    notes,
-  ]);
-  return (result.rowCount ?? 0) > 0;
-}
 
 export async function addSet(
   sessionExerciseId: string,
@@ -353,6 +391,7 @@ export async function addSet(
     sessionExerciseId,
   ]);
   if (!exercise.rows[0]) return null;
+  await assertEditableByExercise(sessionExerciseId);
 
   const result = await pool.query<SessionSetRow>(
     `INSERT INTO session_sets (session_exercise_id, position, set_type, variation, weight_kg, reps)
@@ -371,28 +410,23 @@ export async function addSet(
   return toSet(result.rows[0]!);
 }
 
-export async function updateSet(id: string, patch: SessionSetPatch): Promise<SessionSet | null> {
-  const sets: string[] = [];
-  const values: unknown[] = [];
-  let i = 1;
+const SET_COLUMN_MAP: Record<keyof Omit<SessionSetPatch, "completed">, string> = {
+  setType: "set_type",
+  variation: "variation",
+  weightKg: "weight_kg",
+  reps: "reps",
+  rpe: "rpe",
+  rir: "rir",
+};
 
-  const columnPatch: [keyof SessionSetPatch, string][] = [
-    ["setType", "set_type"],
-    ["variation", "variation"],
-    ["weightKg", "weight_kg"],
-    ["reps", "reps"],
-    ["rpe", "rpe"],
-    ["rir", "rir"],
-  ];
-  for (const [key, column] of columnPatch) {
-    if (patch[key] !== undefined) {
-      sets.push(`${column} = $${i++}`);
-      values.push(patch[key]);
-    }
-  }
-  if (patch.completed === true) {
+export async function updateSet(id: string, patch: SessionSetPatch): Promise<SessionSet | null> {
+  await assertEditableBySet(id);
+  const { completed, ...columns } = patch;
+  const { sets, values, nextIndex } = buildUpdateSet(columns, SET_COLUMN_MAP);
+
+  if (completed === true) {
     sets.push("completed_at = COALESCE(completed_at, NOW())");
-  } else if (patch.completed === false) {
+  } else if (completed === false) {
     sets.push("completed_at = NULL");
   }
 
@@ -403,24 +437,15 @@ export async function updateSet(id: string, patch: SessionSetPatch): Promise<Ses
 
   values.push(id);
   const result = await pool.query<SessionSetRow>(
-    `UPDATE session_sets SET ${sets.join(", ")} WHERE id = $${i} RETURNING *`,
+    `UPDATE session_sets SET ${sets.join(", ")} WHERE id = $${nextIndex} RETURNING *`,
     values
   );
   return result.rows[0] ? toSet(result.rows[0]) : null;
 }
 
 export async function removeSet(id: string): Promise<boolean> {
+  await assertEditableBySet(id);
   const result = await pool.query("DELETE FROM session_sets WHERE id = $1", [id]);
   return (result.rowCount ?? 0) > 0;
 }
 
-export async function trainedDates(timezone: string): Promise<string[]> {
-  const result = await pool.query<{ date: string }>(
-    `SELECT DISTINCT (started_at AT TIME ZONE $1)::date::text AS date
-       FROM workout_sessions
-      WHERE status = 'completed'
-      ORDER BY date ASC`,
-    [timezone]
-  );
-  return result.rows.map((row) => row.date);
-}

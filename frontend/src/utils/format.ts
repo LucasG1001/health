@@ -30,6 +30,15 @@ export function formatKcal(value: number | null | undefined): string {
   return `${value.toLocaleString("pt-BR", { maximumFractionDigits: 0 })} kcal`;
 }
 
+/** Grupos musculares distintos de uma lista de exercícios, na ordem em que aparecem. */
+export function muscleSummary(
+  exercises: { muscleGroup: MuscleGroup }[],
+  separator = " · "
+): string {
+  const labels = [...new Set(exercises.map((exercise) => MUSCLE_GROUP_LABELS[exercise.muscleGroup]))];
+  return labels.filter(Boolean).join(separator);
+}
+
 export function formatClock(totalMs: number): string {
   const totalSeconds = Math.max(0, Math.ceil(totalMs / 1000));
   const minutes = Math.floor(totalSeconds / 60);

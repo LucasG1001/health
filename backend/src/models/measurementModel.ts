@@ -1,9 +1,8 @@
 import { pool } from "../database/connection.js";
 import { buildUpdateSet } from "../lib/sqlUpdate.js";
+import { isUniqueViolation } from "../lib/pgError.js";
 import { DuplicateMeasurementError } from "./errors.js";
 import type { MeasurementPatch, MeasurementRow, NewMeasurement } from "../types/measurement.js";
-
-const UNIQUE_VIOLATION = "23505";
 
 export async function findAll(from: string | null, to: string | null): Promise<MeasurementRow[]> {
   const conditions: string[] = [];
@@ -38,6 +37,25 @@ export async function findLatestWithWeight(): Promise<MeasurementRow | null> {
   return result.rows[0] ?? null;
 }
 
+/**
+ * Últimos valores conhecidos de peso e % de gordura, cada um da medição mais recente
+ * em que o campo foi preenchido. Usar só a medição mais recente zerava o progresso da
+ * meta quando a última medição registrava apenas circunferências.
+ */
+export async function findLatestValues(): Promise<{ weightKg: number | null; bodyFatPct: number | null }> {
+  const result = await pool.query<{ weight_kg: number | null; body_fat_pct: number | null }>(
+    `SELECT
+       (SELECT weight_kg FROM body_measurements
+         WHERE weight_kg IS NOT NULL ORDER BY measured_on DESC LIMIT 1) AS weight_kg,
+       (SELECT body_fat_pct FROM body_measurements
+         WHERE body_fat_pct IS NOT NULL ORDER BY measured_on DESC LIMIT 1) AS body_fat_pct`
+  );
+  return {
+    weightKg: result.rows[0]?.weight_kg ?? null,
+    bodyFatPct: result.rows[0]?.body_fat_pct ?? null,
+  };
+}
+
 export async function findById(id: string): Promise<MeasurementRow | null> {
   const result = await pool.query<MeasurementRow>("SELECT * FROM body_measurements WHERE id = $1", [id]);
   return result.rows[0] ?? null;
@@ -64,9 +82,7 @@ export async function create(entry: NewMeasurement): Promise<MeasurementRow> {
     );
     return result.rows[0]!;
   } catch (error) {
-    if (error instanceof Error && "code" in error && error.code === UNIQUE_VIOLATION) {
-      throw new DuplicateMeasurementError();
-    }
+    if (isUniqueViolation(error)) throw new DuplicateMeasurementError();
     throw error;
   }
 }
@@ -96,9 +112,7 @@ export async function update(id: string, patch: MeasurementPatch): Promise<Measu
     );
     return result.rows[0] ?? null;
   } catch (error) {
-    if (error instanceof Error && "code" in error && error.code === UNIQUE_VIOLATION) {
-      throw new DuplicateMeasurementError();
-    }
+    if (isUniqueViolation(error)) throw new DuplicateMeasurementError();
     throw error;
   }
 }

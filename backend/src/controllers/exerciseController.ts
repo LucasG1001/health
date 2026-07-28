@@ -3,22 +3,7 @@ import { parseDateRange, respondValidationError } from "../lib/validation.js";
 import { relativeUploadPath, removeUploadedFile } from "../lib/upload.js";
 import { createExerciseSchema, updateExerciseSchema } from "../schemas/exercise.js";
 import * as exerciseModel from "../models/exerciseModel.js";
-import type { MuscleGroup } from "../types/exercise.js";
-
-const MUSCLE_GROUPS: MuscleGroup[] = [
-  "chest",
-  "back",
-  "shoulders",
-  "biceps",
-  "triceps",
-  "forearms",
-  "quads",
-  "hamstrings",
-  "glutes",
-  "calves",
-  "abs",
-  "other",
-];
+import { MUSCLE_GROUPS, type MuscleGroup } from "../types/exercise.js";
 
 export const getAll = asyncHandler("Erro ao buscar os exercícios.", async (req, res) => {
   const muscleGroup =

@@ -9,30 +9,24 @@ import {
   PlayIcon,
   PlusIcon,
 } from "../../components/Icon/icons";
+import { ErrorBanner } from "../../components/ErrorBanner/ErrorBanner";
+import { Loading } from "../../components/Loading/Loading";
 import { useWorkoutSession } from "../../context/workoutSessionStore";
 import { useSplits } from "../../hooks/useSplits";
-import { MUSCLE_GROUP_LABELS } from "../../utils/format";
+import { muscleSummary } from "../../utils/format";
 import type { Split } from "../../types/split";
 import styles from "./WorkoutHomePage.module.css";
 
-function muscleSummary(split: Split): string {
-  const seen = new Set<string>();
-  const labels: string[] = [];
-  for (const exercise of split.exercises) {
-    const label = MUSCLE_GROUP_LABELS[exercise.muscleGroup];
-    if (label && !seen.has(label)) {
-      seen.add(label);
-      labels.push(label);
-    }
-  }
-  if (labels.length > 0) return labels.join(", ");
+function splitSubtitle(split: Split): string {
+  const muscles = muscleSummary(split.exercises, ", ");
+  if (muscles !== "") return muscles;
   return `${split.exercises.length} exercício${split.exercises.length === 1 ? "" : "s"}`;
 }
 
 export function WorkoutHomePage() {
   const navigate = useNavigate();
-  const { state } = useWorkoutSession();
-  const { splits, loading } = useSplits();
+  const { state, bootError } = useWorkoutSession();
+  const { splits, loading, error, reload } = useSplits();
 
   const sessionActive = state.session !== null && state.session.status === "in_progress";
 
@@ -94,8 +88,11 @@ export function WorkoutHomePage() {
         </button>
       )}
 
+      {bootError && <ErrorBanner message={bootError} />}
+      {error && <ErrorBanner message={error} onRetry={reload} />}
+
       {loading ? (
-        <p className={styles.loading}>Carregando…</p>
+        <Loading />
       ) : splits.length > 0 ? (
         <div className={styles.todayList}>
           {splits.map((split) => (
@@ -107,13 +104,13 @@ export function WorkoutHomePage() {
             >
               <div className={styles.todayInfo}>
                 <span className={styles.todayName}>{split.name}</span>
-                <span className={styles.todayMeta}>{muscleSummary(split)}</span>
+                <span className={styles.todayMeta}>{splitSubtitle(split)}</span>
               </div>
               <ChevronRightIcon className={styles.chevron} />
             </button>
           ))}
         </div>
-      ) : (
+      ) : error ? null : (
         <EmptyState
           icon={<DumbbellIcon />}
           title="Comece montando seu treino"

@@ -6,10 +6,6 @@ export async function fetchGoals(): Promise<Goal[]> {
   return response.data;
 }
 
-export async function fetchActiveGoal(): Promise<Goal | null> {
-  const response = await api.get<Goal | null>("/api/goals/active");
-  return response.data;
-}
 
 export async function createGoal(input: GoalInput): Promise<Goal> {
   const response = await api.post<Goal>("/api/goals", input);

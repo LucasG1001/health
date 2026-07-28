@@ -1,10 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { StatCard } from "../../components/StatCard/StatCard";
+import { ErrorBanner } from "../../components/ErrorBanner/ErrorBanner";
+import { Loading } from "../../components/Loading/Loading";
 import { fetchSession, updateSessionNotes } from "../../services/sessionService";
 import { apiErrorMessage } from "../../utils/apiError";
-import { formatDuration, formatNumber } from "../../utils/format";
+import { completedSetsCount, totalSetsCount } from "../../utils/sessionMachine";
+import { formatDuration, formatKg } from "../../utils/format";
 import type { FinishSummary, WorkoutSession } from "../../types/session";
 import styles from "./SessionSummaryPage.module.css";
 
@@ -20,6 +23,7 @@ export function SessionSummaryPage() {
   const [notes, setNotes] = useState("");
   const [savingNotes, setSavingNotes] = useState(false);
   const [notesSaved, setNotesSaved] = useState(false);
+  const savedTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -41,19 +45,17 @@ export function SessionSummaryPage() {
     };
   }, [id]);
 
+  useEffect(
+    () => () => {
+      if (savedTimerRef.current !== null) window.clearTimeout(savedTimerRef.current);
+    },
+    []
+  );
+
   const durationSeconds = summary?.durationSeconds ?? session?.durationSeconds ?? null;
   const totalVolumeKg = summary?.totalVolumeKg ?? session?.totalVolumeKg ?? null;
-  const completedSets =
-    summary?.completedSets ??
-    (session
-      ? session.exercises.reduce(
-          (total, exercise) => total + exercise.sets.filter((set) => set.completedAt !== null).length,
-          0
-        )
-      : null);
-  const plannedSets =
-    summary?.plannedSets ??
-    (session ? session.exercises.reduce((total, exercise) => total + exercise.sets.length, 0) : null);
+  const completedSets = summary?.completedSets ?? (session ? completedSetsCount(session) : null);
+  const plannedSets = summary?.plannedSets ?? (session ? totalSetsCount(session) : null);
 
   const handleSaveNotes = async () => {
     if (!id) return;
@@ -62,7 +64,7 @@ export function SessionSummaryPage() {
     try {
       await updateSessionNotes(id, notes.trim() === "" ? null : notes.trim());
       setNotesSaved(true);
-      setTimeout(() => setNotesSaved(false), 2000);
+      savedTimerRef.current = window.setTimeout(() => setNotesSaved(false), 2000);
     } catch (err) {
       setError(apiErrorMessage(err, "Não foi possível salvar as anotações."));
     } finally {
@@ -74,16 +76,16 @@ export function SessionSummaryPage() {
     <div className={styles.page}>
       <PageHeader title="Resumo do treino" subtitle={session?.splitName} backTo="/treino" />
 
-      {error && <p className={styles.error}>{error}</p>}
+      {error && <ErrorBanner message={error} />}
       {loading && !session ? (
-        <p className={styles.loading}>Carregando…</p>
+        <Loading />
       ) : (
         <>
           <div className={styles.statsGrid}>
             <StatCard label="Duração" value={formatDuration(durationSeconds)} />
             <StatCard
               label="Volume total"
-              value={totalVolumeKg != null ? `${formatNumber(totalVolumeKg)} kg` : "—"}
+              value={formatKg(totalVolumeKg)}
             />
             <StatCard
               label="Séries"

@@ -5,11 +5,15 @@ import { createGoalSchema, updateGoalSchema } from "../schemas/goal.js";
 import * as goalModel from "../models/goalModel.js";
 import * as measurementModel from "../models/measurementModel.js";
 import type { Goal, GoalRow } from "../types/goal.js";
-import type { MeasurementRow } from "../types/measurement.js";
 
-function toGoal(row: GoalRow, latest: MeasurementRow | null): Goal {
-  const currentWeightKg = latest?.weight_kg ?? null;
-  const currentBodyFatPct = latest?.body_fat_pct ?? null;
+interface LatestValues {
+  weightKg: number | null;
+  bodyFatPct: number | null;
+}
+
+function toGoal(row: GoalRow, latest: LatestValues): Goal {
+  const currentWeightKg = latest.weightKg;
+  const currentBodyFatPct = latest.bodyFatPct;
 
   const weightProgressPct =
     row.target_weight_kg != null && row.start_weight_kg != null && currentWeightKg != null
@@ -39,12 +43,12 @@ function toGoal(row: GoalRow, latest: MeasurementRow | null): Goal {
 }
 
 export const getAll = asyncHandler("Erro ao buscar as metas.", async (_req, res) => {
-  const [rows, latest] = await Promise.all([goalModel.findAll(), measurementModel.findLatest()]);
+  const [rows, latest] = await Promise.all([goalModel.findAll(), measurementModel.findLatestValues()]);
   res.json(rows.map((row) => toGoal(row, latest)));
 });
 
 export const getActive = asyncHandler("Erro ao buscar a meta ativa.", async (_req, res) => {
-  const [row, latest] = await Promise.all([goalModel.findActive(), measurementModel.findLatest()]);
+  const [row, latest] = await Promise.all([goalModel.findActive(), measurementModel.findLatestValues()]);
   res.json(row ? toGoal(row, latest) : null);
 });
 
@@ -54,11 +58,8 @@ export const create = asyncHandler("Erro ao criar a meta.", async (req, res) => 
     respondValidationError(res, parsed.error);
     return;
   }
-  const latest = await measurementModel.findLatest();
-  const row = await goalModel.create(parsed.data, {
-    weightKg: latest?.weight_kg ?? null,
-    bodyFatPct: latest?.body_fat_pct ?? null,
-  });
+  const latest = await measurementModel.findLatestValues();
+  const row = await goalModel.create(parsed.data, latest);
   res.status(201).json(toGoal(row, latest));
 });
 
@@ -73,7 +74,7 @@ export const update = asyncHandler("Erro ao atualizar a meta.", async (req, res)
     res.status(404).json({ error: "Meta não encontrada." });
     return;
   }
-  const latest = await measurementModel.findLatest();
+  const latest = await measurementModel.findLatestValues();
   res.json(toGoal(row, latest));
 });
 

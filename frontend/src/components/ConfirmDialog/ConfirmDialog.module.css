@@ -56,7 +56,7 @@
   padding: 10px 24px;
   border-radius: var(--radius-md);
   background-color: var(--color-accent);
-  color: #fff;
+  color: var(--color-on-accent);
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-semibold);
   transition: background-color var(--transition-fast);
@@ -71,5 +71,10 @@
 }
 
 .danger:hover {
-  background-color: #dc2626;
+  background-color: var(--color-error-hover);
+}
+
+.confirmButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }

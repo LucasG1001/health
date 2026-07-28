@@ -1,73 +1,81 @@
 import { useState } from "react";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
+import { ErrorBanner } from "../../components/ErrorBanner/ErrorBanner";
+import { Loading } from "../../components/Loading/Loading";
 import { useSettings } from "../../hooks/useSettings";
 import { FREQUENCY_LABELS } from "../../utils/format";
+import { INVALID, parseOptionalInteger } from "../../utils/numberMask";
 import { apiErrorMessage } from "../../utils/apiError";
 import type { Settings, SettingsInput, WeighInFrequency } from "../../types/settings";
 import styles from "./SettingsPage.module.css";
 
 export function SettingsPage() {
-  const { settings, loading, error, save } = useSettings();
+  const { settings, loading, error, reload, save } = useSettings();
 
   return (
     <div className={styles.page}>
       <PageHeader title="Configurações" backTo="/treino" />
 
-      {error && <div className={styles.error}>{error}</div>}
-      {loading && <p className={styles.loading}>Carregando…</p>}
+      {error && <ErrorBanner message={error} onRetry={reload} />}
+      {loading && <Loading />}
 
-      {!loading && <SettingsForm settings={settings} save={save} />}
+      {/* Sem as configurações carregadas o formulário só teria defaults, e salvar
+          sobrescreveria as configurações reais do servidor. */}
+      {!loading && settings && <SettingsForm settings={settings} save={save} />}
     </div>
   );
 }
 
 interface SettingsFormProps {
-  settings: Settings | null;
+  settings: Settings;
   save: (input: SettingsInput) => Promise<Settings>;
 }
 
 function SettingsForm({ settings, save }: SettingsFormProps) {
-  const [weighInFrequency, setWeighInFrequency] = useState<WeighInFrequency>(
-    settings?.weighInFrequency ?? "weekly"
-  );
+  const [weighInFrequency, setWeighInFrequency] = useState<WeighInFrequency>(settings.weighInFrequency);
   const [waterGoal, setWaterGoal] = useState(
-    settings?.waterGoalMl != null ? String(settings.waterGoalMl) : ""
+    settings.waterGoalMl != null ? String(settings.waterGoalMl) : ""
   );
   const [calorieGoal, setCalorieGoal] = useState(
-    settings?.calorieGoalKcal != null ? String(settings.calorieGoalKcal) : ""
+    settings.calorieGoalKcal != null ? String(settings.calorieGoalKcal) : ""
   );
-  const [soundEnabled, setSoundEnabled] = useState(settings?.soundEnabled ?? true);
-  const [vibrationEnabled, setVibrationEnabled] = useState(settings?.vibrationEnabled ?? true);
-  const [wakeLockEnabled, setWakeLockEnabled] = useState(settings?.wakeLockEnabled ?? true);
-  const [restWarmup, setRestWarmup] = useState(String(settings?.restWarmupSeconds ?? 45));
-  const [restWorking, setRestWorking] = useState(String(settings?.restWorkingSeconds ?? 90));
+  const [soundEnabled, setSoundEnabled] = useState(settings.soundEnabled);
+  const [vibrationEnabled, setVibrationEnabled] = useState(settings.vibrationEnabled);
+  const [wakeLockEnabled, setWakeLockEnabled] = useState(settings.wakeLockEnabled);
+  const [restWorking, setRestWorking] = useState(String(settings.restWorkingSeconds));
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const parseInteger = (raw: string): number | null => {
-    if (raw.trim() === "") return null;
-    const parsed = Number(raw);
-    return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSaving(true);
     setFeedback(null);
     setSaveError(null);
+
+    // Antes um valor inválido virava null (apagando a meta) ou era omitido em silêncio,
+    // e o feedback ainda dizia "salvas".
+    const water = parseOptionalInteger(waterGoal);
+    const calories = parseOptionalInteger(calorieGoal);
+    const working = parseOptionalInteger(restWorking);
+    if (water === INVALID || calories === INVALID || working === INVALID) {
+      setSaveError("Use apenas números inteiros positivos.");
+      return;
+    }
+    if (working === null) {
+      setSaveError("Informe o tempo de descanso.");
+      return;
+    }
+
+    setSaving(true);
     try {
-      const warmup = parseInteger(restWarmup);
-      const working = parseInteger(restWorking);
       await save({
         weighInFrequency,
-        waterGoalMl: parseInteger(waterGoal),
-        calorieGoalKcal: parseInteger(calorieGoal),
+        waterGoalMl: water,
+        calorieGoalKcal: calories,
         soundEnabled,
         vibrationEnabled,
         wakeLockEnabled,
-        ...(warmup != null ? { restWarmupSeconds: warmup } : {}),
-        ...(working != null ? { restWorkingSeconds: working } : {}),
+        restWorkingSeconds: working,
       });
       setFeedback("Configurações salvas.");
     } catch (err) {
@@ -122,16 +130,7 @@ function SettingsForm({ settings, save }: SettingsFormProps) {
         <h2 className={styles.sectionTitle}>Treino</h2>
         <div className={styles.grid}>
           <label className={styles.field}>
-            <span className={styles.fieldLabel}>Descanso aquecimento (s)</span>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={restWarmup}
-              onChange={(e) => setRestWarmup(e.target.value)}
-            />
-          </label>
-          <label className={styles.field}>
-            <span className={styles.fieldLabel}>Descanso série válida (s)</span>
+            <span className={styles.fieldLabel}>Descanso entre séries (s)</span>
             <input
               type="text"
               inputMode="numeric"

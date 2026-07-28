@@ -73,6 +73,19 @@ export function MeasuresPage() {
       ? latest.weightKg - previous.weightKg
       : null;
 
+  const outletContext = useMemo(
+    () => ({
+      reload: () => {
+        reload();
+        reloadGoals();
+      },
+      measurements,
+      loading,
+      remove,
+    }),
+    [reload, reloadGoals, measurements, loading, remove]
+  );
+
   const overdueDays = useMemo(() => {
     if (!settings || !latest) return null;
     const frequencyDays = FREQUENCY_DAYS[settings.weighInFrequency];
@@ -180,7 +193,12 @@ export function MeasuresPage() {
               </div>
               <PeriodFilter value={period} onChange={setPeriod} />
             </div>
-            <MetricLineChart data={chartData} unit={selectedMetric.unit} goalValue={goalValue} />
+            <MetricLineChart
+              data={chartData}
+              unit={selectedMetric.unit}
+              goalValue={goalValue}
+              loading={loading}
+            />
           </section>
         </>
       )}
@@ -204,7 +222,7 @@ export function MeasuresPage() {
         </Link>
       </nav>
 
-      <Outlet context={{ reload: () => { reload(); reloadGoals(); }, measurements, remove }} />
+      <Outlet context={outletContext} />
     </div>
   );
 }

@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { NumericInput } from "../../components/NumericInput/NumericInput";
+import { ErrorBanner } from "../../components/ErrorBanner/ErrorBanner";
+import { Loading } from "../../components/Loading/Loading";
 import { useProfile } from "../../hooks/useProfile";
 import { ACTIVITY_LABELS, BLOOD_TYPES, formatKcal, formatNumber } from "../../utils/format";
 import { apiErrorMessage } from "../../utils/apiError";
@@ -9,35 +11,37 @@ import type { ActivityLevel, BiologicalSex, BloodType, Profile, ProfileInput } f
 import styles from "./ProfilePage.module.css";
 
 export function ProfilePage() {
-  const { profile, loading, error, save } = useProfile();
+  const { profile, loading, error, reload, save } = useProfile();
 
   return (
     <div className={styles.page}>
       <PageHeader title="Perfil" backTo="/medidas" />
 
-      {error && <div className={styles.error}>{error}</div>}
-      {loading && <p className={styles.loading}>Carregando…</p>}
+      {error && <ErrorBanner message={error} onRetry={reload} />}
+      {loading && <Loading />}
 
-      {!loading && <ProfileForm profile={profile} save={save} />}
+      {/* Sem o perfil carregado o formulário só teria campos vazios, e salvar apagaria
+          altura, nascimento e condições de saúde no servidor. */}
+      {!loading && profile && <ProfileForm profile={profile} save={save} />}
     </div>
   );
 }
 
 interface ProfileFormProps {
-  profile: Profile | null;
+  profile: Profile;
   save: (input: ProfileInput) => Promise<Profile>;
 }
 
 function ProfileForm({ profile, save }: ProfileFormProps) {
-  const [heightCm, setHeightCm] = useState(numberToMask(profile?.heightCm));
-  const [birthDate, setBirthDate] = useState(profile?.birthDate ?? "");
-  const [biologicalSex, setBiologicalSex] = useState<BiologicalSex | "">(profile?.biologicalSex ?? "");
-  const [bloodType, setBloodType] = useState<BloodType | "">(profile?.bloodType ?? "");
-  const [activityLevel, setActivityLevel] = useState<ActivityLevel | "">(profile?.activityLevel ?? "");
-  const [allergies, setAllergies] = useState(profile?.allergies ?? "");
-  const [medicalConditions, setMedicalConditions] = useState(profile?.medicalConditions ?? "");
-  const [medications, setMedications] = useState(profile?.medications ?? "");
-  const [injuries, setInjuries] = useState(profile?.injuries ?? "");
+  const [heightCm, setHeightCm] = useState(numberToMask(profile.heightCm));
+  const [birthDate, setBirthDate] = useState(profile.birthDate ?? "");
+  const [biologicalSex, setBiologicalSex] = useState<BiologicalSex | "">(profile.biologicalSex ?? "");
+  const [bloodType, setBloodType] = useState<BloodType | "">(profile.bloodType ?? "");
+  const [activityLevel, setActivityLevel] = useState<ActivityLevel | "">(profile.activityLevel ?? "");
+  const [allergies, setAllergies] = useState(profile.allergies ?? "");
+  const [medicalConditions, setMedicalConditions] = useState(profile.medicalConditions ?? "");
+  const [medications, setMedications] = useState(profile.medications ?? "");
+  const [injuries, setInjuries] = useState(profile.injuries ?? "");
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -69,7 +73,7 @@ function ProfileForm({ profile, save }: ProfileFormProps) {
 
   return (
     <form className={styles.form} onSubmit={handleSubmit}>
-      {(profile?.bmi != null || profile?.bmr != null) && (
+      {(profile.bmi != null || profile.bmr != null) && (
         <div className={styles.derived}>
           {profile.age != null && <span>{profile.age} anos</span>}
           {profile.bmi != null && <span>IMC {formatNumber(profile.bmi, 1)}</span>}

@@ -10,7 +10,6 @@ function toSettings(row: SettingsRow): Settings {
     soundEnabled: row.sound_enabled,
     vibrationEnabled: row.vibration_enabled,
     wakeLockEnabled: row.wake_lock_enabled,
-    restWarmupSeconds: row.rest_warmup_seconds,
     restWorkingSeconds: row.rest_working_seconds,
     updatedAt: row.updated_at,
   };
@@ -33,7 +32,6 @@ const COLUMN_MAP: Record<keyof SettingsPatch, string> = {
   soundEnabled: "sound_enabled",
   vibrationEnabled: "vibration_enabled",
   wakeLockEnabled: "wake_lock_enabled",
-  restWarmupSeconds: "rest_warmup_seconds",
   restWorkingSeconds: "rest_working_seconds",
 };
 

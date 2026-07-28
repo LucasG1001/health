@@ -41,10 +41,6 @@ export async function updateExercisePlan(
   return response.data;
 }
 
-export async function reorderSplits(order: string[]): Promise<Split[]> {
-  const response = await api.post<Split[]>("/api/splits/reorder", { order });
-  return response.data;
-}
 
 export async function deleteSplit(id: string): Promise<void> {
   await api.delete(`/api/splits/${id}`);

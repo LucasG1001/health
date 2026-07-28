@@ -1,16 +1,19 @@
-export type MuscleGroup =
-  | "chest"
-  | "back"
-  | "shoulders"
-  | "biceps"
-  | "triceps"
-  | "forearms"
-  | "quads"
-  | "hamstrings"
-  | "glutes"
-  | "calves"
-  | "abs"
-  | "other";
+export const MUSCLE_GROUPS = [
+  "chest",
+  "back",
+  "shoulders",
+  "biceps",
+  "triceps",
+  "forearms",
+  "quads",
+  "hamstrings",
+  "glutes",
+  "calves",
+  "abs",
+  "other",
+] as const;
+
+export type MuscleGroup = (typeof MUSCLE_GROUPS)[number];
 
 export interface ExerciseRow {
   id: string;
@@ -26,7 +29,6 @@ export interface ExerciseRow {
   machine_setting: string | null;
   notes: string | null;
   video_url: string | null;
-  external_id: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -45,7 +47,6 @@ export interface Exercise {
   machineSetting: string | null;
   notes: string | null;
   videoUrl: string | null;
-  externalId: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -62,11 +63,9 @@ export interface NewExercise {
   machineSetting?: string | null;
   notes?: string | null;
   videoUrl?: string | null;
-  externalId?: string | null;
-  imagePath?: string | null;
 }
 
-export type ExercisePatch = Partial<Omit<NewExercise, "externalId" | "imagePath">>;
+export type ExercisePatch = Partial<NewExercise>;
 
 export interface LastPerformanceSet {
   setType: string;

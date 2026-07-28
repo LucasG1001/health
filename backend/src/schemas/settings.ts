@@ -7,7 +7,6 @@ export const settingsUpdateSchema = z.object({
   soundEnabled: z.boolean().optional(),
   vibrationEnabled: z.boolean().optional(),
   wakeLockEnabled: z.boolean().optional(),
-  restWarmupSeconds: z.number().int().min(5, "Descanso mínimo de 5s.").max(600, "Descanso máximo de 600s.").optional(),
   restWorkingSeconds: z.number().int().min(5, "Descanso mínimo de 5s.").max(600, "Descanso máximo de 600s.").optional(),
 });
 

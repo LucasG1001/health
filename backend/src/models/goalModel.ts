@@ -1,9 +1,8 @@
 import { pool } from "../database/connection.js";
 import { buildUpdateSet } from "../lib/sqlUpdate.js";
+import { isUniqueViolation } from "../lib/pgError.js";
 import { ActiveGoalExistsError } from "./errors.js";
 import type { GoalPatch, GoalRow, NewGoal } from "../types/goal.js";
-
-const UNIQUE_VIOLATION = "23505";
 
 export async function findAll(): Promise<GoalRow[]> {
   const result = await pool.query<GoalRow>("SELECT * FROM goals ORDER BY created_at DESC");
@@ -39,9 +38,7 @@ export async function create(
     );
     return result.rows[0]!;
   } catch (error) {
-    if (error instanceof Error && "code" in error && error.code === UNIQUE_VIOLATION) {
-      throw new ActiveGoalExistsError();
-    }
+    if (isUniqueViolation(error)) throw new ActiveGoalExistsError();
     throw error;
   }
 }
@@ -59,7 +56,8 @@ export async function update(id: string, patch: GoalPatch): Promise<GoalRow | nu
 
   if (patch.status === "achieved") {
     sets.push("achieved_at = COALESCE(achieved_at, NOW())");
-  } else if (patch.status === "active" || patch.status === "abandoned") {
+  } else if (patch.status === "active") {
+    // Só reabrir limpa a data: abandonar não deve apagar o registro de já ter sido alcançada.
     sets.push("achieved_at = NULL");
   }
 
@@ -72,9 +70,7 @@ export async function update(id: string, patch: GoalPatch): Promise<GoalRow | nu
     );
     return result.rows[0] ?? null;
   } catch (error) {
-    if (error instanceof Error && "code" in error && error.code === UNIQUE_VIOLATION) {
-      throw new ActiveGoalExistsError();
-    }
+    if (isUniqueViolation(error)) throw new ActiveGoalExistsError();
     throw error;
   }
 }

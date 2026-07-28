@@ -6,6 +6,10 @@
   font-size: var(--font-size-sm);
 }
 
+.loading {
+  color: var(--color-text-tertiary);
+}
+
 .field {
   display: flex;
   flex-direction: column;

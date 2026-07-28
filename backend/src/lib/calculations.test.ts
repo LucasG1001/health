@@ -3,15 +3,15 @@ import { calcAge, calcBmi, calcBmr, calcEpley1Rm, calcTdee, deriveBodyMetrics } 
 
 describe("calcAge", () => {
   it("conta o ano cheio depois do aniversário", () => {
-    expect(calcAge("1990-01-15", new Date(2026, 6, 3))).toBe(36);
+    expect(calcAge("1990-01-15", "2026-07-03")).toBe(36);
   });
 
   it("desconta um ano antes do aniversário", () => {
-    expect(calcAge("1990-12-25", new Date(2026, 6, 3))).toBe(35);
+    expect(calcAge("1990-12-25", "2026-07-03")).toBe(35);
   });
 
   it("trata o dia exato do aniversário", () => {
-    expect(calcAge("1990-07-03", new Date(2026, 6, 3))).toBe(36);
+    expect(calcAge("1990-07-03", "2026-07-03")).toBe(36);
   });
 });
 
@@ -58,6 +58,33 @@ describe("deriveBodyMetrics", () => {
         activityLevel: null,
       })
     ).toEqual({ bmi: null, bmr: null, tdee: null });
+  });
+
+  it("aceita zero sem virar null", () => {
+    // Antes eram checagens de truthiness: um 0 em qualquer campo anulava o cálculo.
+    const derived = deriveBodyMetrics({
+      weightKg: 80,
+      heightCm: 180,
+      birthDate: "2026-01-01",
+      biologicalSex: "male",
+      activityLevel: "sedentary",
+      onIso: "2026-07-03",
+    });
+    expect(derived.bmr).not.toBeNull();
+    expect(derived.tdee).not.toBeNull();
+  });
+
+  it("usa a idade da data da medição, não a de hoje", () => {
+    const params = {
+      weightKg: 80,
+      heightCm: 180,
+      birthDate: "1990-07-03",
+      biologicalSex: "male" as const,
+      activityLevel: "moderate" as const,
+    };
+    const then = deriveBodyMetrics({ ...params, onIso: "2010-07-03" });
+    const now = deriveBodyMetrics({ ...params, onIso: "2026-07-03" });
+    expect(then.bmr).toBeGreaterThan(now.bmr!);
   });
 
   it("deriva tudo quando o perfil está completo", () => {

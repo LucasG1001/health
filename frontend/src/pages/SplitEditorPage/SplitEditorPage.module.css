@@ -181,30 +181,6 @@
   cursor: pointer;
 }
 
-.thumb {
-  width: 64px;
-  height: 64px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  background: var(--color-bg-tertiary);
-}
-
-.thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.thumbIcon {
-  width: 26px;
-  height: 26px;
-  color: var(--color-text-tertiary);
-}
-
 .info {
   display: flex;
   flex-direction: column;
@@ -291,7 +267,7 @@
 
 .restControl:hover:not(:disabled) {
   background: var(--color-accent);
-  color: #fff;
+  color: var(--color-on-accent);
 }
 
 .restControl:disabled {
@@ -354,7 +330,7 @@
   border-radius: var(--radius-lg);
   background: var(--gradient-primary);
   box-shadow: var(--shadow-glow);
-  color: #fff;
+  color: var(--color-on-accent);
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-semibold);
   transition: filter var(--transition-fast), opacity var(--transition-fast);
@@ -368,7 +344,7 @@
   min-height: 50px;
   border-radius: var(--radius-md);
   background: var(--color-accent);
-  color: #fff;
+  color: var(--color-on-accent);
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-semibold);
   transition: background var(--transition-fast), opacity var(--transition-fast);
@@ -443,31 +419,6 @@
 
 .pickerItem:hover {
   background: var(--color-bg-hover);
-}
-
-.pickerThumb {
-  width: 48px;
-  height: 48px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  background: var(--color-accent-subtle);
-  border: 1px solid var(--color-border-subtle);
-}
-
-.pickerThumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.pickerThumbIcon {
-  width: 22px;
-  height: 22px;
-  color: var(--color-text-tertiary);
 }
 
 .pickerEmpty {

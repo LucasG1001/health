@@ -1,7 +1,8 @@
+import { SegmentedControl } from "../SegmentedControl/SegmentedControl";
 import { PERIOD_LABELS, type Period } from "../../utils/chartUtils";
-import styles from "./PeriodFilter.module.css";
 
 const PERIODS: Period[] = ["week", "month", "year", "all"];
+const OPTIONS = PERIODS.map((period) => ({ value: period, label: PERIOD_LABELS[period] }));
 
 interface PeriodFilterProps {
   value: Period;
@@ -9,20 +10,5 @@ interface PeriodFilterProps {
 }
 
 export function PeriodFilter({ value, onChange }: PeriodFilterProps) {
-  return (
-    <div className={styles.container} role="tablist" aria-label="Período">
-      {PERIODS.map((period) => (
-        <button
-          key={period}
-          type="button"
-          role="tab"
-          aria-selected={value === period}
-          className={`${styles.option} ${value === period ? styles.active : ""}`}
-          onClick={() => onChange(period)}
-        >
-          {PERIOD_LABELS[period]}
-        </button>
-      ))}
-    </div>
-  );
+  return <SegmentedControl label="Período" value={value} options={OPTIONS} onChange={onChange} />;
 }

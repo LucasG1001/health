@@ -7,6 +7,7 @@ import { ConfirmDialog } from "../../components/ConfirmDialog/ConfirmDialog";
 import { DayOfWeekPicker } from "../../components/DayOfWeekPicker/DayOfWeekPicker";
 import { SetStepper } from "../../components/SetStepper/SetStepper";
 import { InterRestModal } from "../../components/InterRestModal/InterRestModal";
+import { ExerciseThumb } from "../../components/ExerciseThumb/ExerciseThumb";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -19,12 +20,8 @@ import {
 } from "../../components/Icon/icons";
 import { useExercises } from "../../hooks/useExercises";
 import { useWorkoutSession } from "../../context/workoutSessionStore";
-import { useSettings } from "../../hooks/useSettings";
 import { useNow } from "../../hooks/useNow";
-import { useRestTimer } from "../../hooks/useRestTimer";
-import { useAudioCue } from "../../hooks/useAudioCue";
-import { useWakeLock } from "../../hooks/useWakeLock";
-import { hasPendingSets } from "../../utils/sessionMachine";
+import { completedSetsOf, firstPendingSetIndex, hasPendingSets } from "../../utils/sessionMachine";
 import { createSplit, fetchSplit, replaceSplitExercises, updateSplit } from "../../services/splitService";
 import { updateExercise } from "../../services/exerciseService";
 import { numberToMask, parseMaskedNumber } from "../../utils/numberMask";
@@ -33,7 +30,7 @@ import {
   formatClock,
   formatKg,
   formatStopwatch,
-  imageFocalStyle,
+  muscleSummary,
   repsTarget,
 } from "../../utils/format";
 import { apiErrorMessage } from "../../utils/apiError";
@@ -65,38 +62,25 @@ export function SplitEditorPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { exercises: catalog } = useExercises();
-  const { settings } = useSettings();
   const {
     state,
+    hydrating,
+    bootError,
+    restRemainingMs,
+    restProgress,
+    unlock,
     start,
     playExercise,
     completeSet,
     skipRest,
-    restEnded,
     finish,
     editSet,
     extendRest,
-    backToOverview,
+    nextExercise,
   } = useWorkoutSession();
 
   const session = state.session;
   const inProgress = session !== null && session.status === "in_progress" && session.splitId === id;
-
-  const { unlock, cueTick, cueGo } = useAudioCue({
-    soundEnabled: settings?.soundEnabled ?? true,
-    vibrationEnabled: settings?.vibrationEnabled ?? true,
-  });
-  useWakeLock((settings?.wakeLockEnabled ?? true) && inProgress);
-
-  const { remainingMs, progress } = useRestTimer({
-    endsAt: inProgress && state.phase === "resting" ? state.restEndsAt : null,
-    totalMs: state.restTotalMs,
-    onTick: (secondsLeft) => cueTick(secondsLeft),
-    onEnd: () => {
-      cueGo();
-      restEnded();
-    },
-  });
   const now = useNow(inProgress);
 
   const [split, setSplit] = useState<Split | null>(null);
@@ -104,6 +88,7 @@ export function SplitEditorPage() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
 
   const [name, setName] = useState("");
   const [weekdays, setWeekdays] = useState<number[]>([]);
@@ -292,105 +277,119 @@ export function SplitEditorPage() {
     return index >= 0 ? { sx: session.exercises[index]!, index } : null;
   };
 
-  const handlePlay = async (exercise: SplitExercise) => {
-    if (busy) return;
-    unlock();
+  // `busy` é estado (render), então não protege dois toques no mesmo tick; o ref é a trava real.
+  const runExclusive = async (action: () => Promise<void>) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
     setBusy(true);
-    setError(null);
     try {
-      let current = inProgress ? session : null;
-      if (!current) current = await start(id);
-      if (!current) return;
-      const sxIndex = current.exercises.findIndex((e) => e.exerciseId === exercise.exerciseId);
-      const sx = sxIndex >= 0 ? current.exercises[sxIndex] : null;
-      if (!sx) return;
-      if (sxIndex !== state.currentExerciseIndex) playExercise(sxIndex);
-      const pending = sx.sets.find((s) => s.completedAt === null);
-      if (!pending) return;
-      await completeSet({
-        setId: pending.id,
-        weightKg: pending.weightKg ?? exercise.workingWeightKg ?? null,
-        reps: pending.reps ?? pending.targetRepsMin ?? 1,
-        restMs: restMsFor(pending),
-        interRestMs: restMsFor(pending),
-      });
-    } catch (err) {
-      setError(apiErrorMessage(err, "Não foi possível iniciar a série."));
+      await action();
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   };
 
-  const handleConclude = async (exercise: SplitExercise) => {
-    const match = sessionExerciseFor(exercise);
-    if (!match || busy) return;
-    const pending = match.sx.sets.filter((s) => s.completedAt === null);
-    if (pending.length === 0) return;
-    setBusy(true);
-    setError(null);
-    try {
-      for (const set of pending) {
-        await editSet(set.id, { completed: true });
+  const handlePlay = (exercise: SplitExercise) =>
+    runExclusive(async () => {
+      // Antes da hidratação terminar não sabemos se já existe sessão ativa: iniciar
+      // outra aqui bateria no índice único de sessão em andamento.
+      if (hydrating) return;
+      unlock();
+      setError(null);
+      try {
+        const current = inProgress && session ? session : await start(id);
+        const sxIndex = current.exercises.findIndex((e) => e.exerciseId === exercise.exerciseId);
+        const sx = sxIndex >= 0 ? current.exercises[sxIndex] : null;
+        if (!sx) return;
+        playExercise(sxIndex);
+        if (!hasPendingSets(sx)) return;
+        const pending = sx.sets[firstPendingSetIndex(sx)]!;
+        await completeSet({
+          setId: pending.id,
+          weightKg: pending.weightKg ?? exercise.workingWeightKg ?? null,
+          reps: pending.reps ?? pending.targetRepsMin ?? 1,
+          restMs: restMsFor(pending),
+          interRestMs: restMsFor(pending),
+        });
+      } catch (err) {
+        setError(apiErrorMessage(err, "Não foi possível iniciar a série."));
       }
-    } catch (err) {
-      setError(apiErrorMessage(err, "Não foi possível concluir o exercício."));
-    } finally {
-      setBusy(false);
-    }
-  };
+    });
 
-  const handleUnconclude = async (exercise: SplitExercise) => {
-    const match = sessionExerciseFor(exercise);
-    if (!match || busy) return;
-    const done = match.sx.sets.filter((s) => s.completedAt !== null);
-    if (done.length === 0) return;
-    setBusy(true);
-    setError(null);
-    try {
-      for (const set of done) {
-        await editSet(set.id, { completed: false });
+  const handleConclude = (exercise: SplitExercise) =>
+    runExclusive(async () => {
+      const match = sessionExerciseFor(exercise);
+      if (!match) return;
+      const pending = match.sx.sets.filter((s) => s.completedAt === null);
+      if (pending.length === 0) return;
+      setError(null);
+      try {
+        for (const set of pending) {
+          // Sem peso e reps a série conta como feita mas soma zero no volume do treino.
+          await editSet(set.id, {
+            completed: true,
+            weightKg: set.weightKg ?? exercise.workingWeightKg ?? null,
+            reps: set.reps ?? set.targetRepsMin ?? 1,
+          });
+        }
+      } catch (err) {
+        setError(apiErrorMessage(err, "Não foi possível concluir o exercício."));
       }
-    } catch (err) {
-      setError(apiErrorMessage(err, "Não foi possível reabrir o exercício."));
-    } finally {
-      setBusy(false);
-    }
-  };
+    });
 
-  const commitInterRestWeight = async (weightMasked: string) => {
-    const finishedSx = session?.exercises[state.currentExerciseIndex] ?? null;
-    const finishedSplitEx = finishedSx
-      ? split?.exercises.find((e) => e.exerciseId === finishedSx.exerciseId) ?? null
-      : null;
-    const parsed = parseMaskedNumber(weightMasked);
-    if (!finishedSplitEx || !finishedSx || parsed === (finishedSplitEx.workingWeightKg ?? null)) return;
-    setBusy(true);
-    try {
-      await updateExercise(finishedSplitEx.exerciseId, { workingWeightKg: parsed });
-      setSplit((prev) =>
-        prev
-          ? {
-              ...prev,
-              exercises: prev.exercises.map((e) =>
-                e.exerciseId === finishedSplitEx.exerciseId ? { ...e, workingWeightKg: parsed } : e
-              ),
-            }
-          : prev
-      );
-      for (const set of finishedSx.sets) {
-        if (set.completedAt !== null) await editSet(set.id, { weightKg: parsed });
+  const handleUnconclude = (exercise: SplitExercise) =>
+    runExclusive(async () => {
+      const match = sessionExerciseFor(exercise);
+      if (!match) return;
+      const done = match.sx.sets.filter((s) => s.completedAt !== null);
+      if (done.length === 0) return;
+      setError(null);
+      try {
+        for (const set of done) {
+          await editSet(set.id, { completed: false });
+        }
+      } catch (err) {
+        setError(apiErrorMessage(err, "Não foi possível reabrir o exercício."));
       }
-    } catch (err) {
-      setError(apiErrorMessage(err, "Não foi possível salvar a carga."));
-    } finally {
-      setBusy(false);
-    }
-  };
+    });
 
-  const handleInterRestDone = async (weightMasked: string) => {
-    await commitInterRestWeight(weightMasked);
-    backToOverview();
-  };
+  const handleInterRestDone = (weightMasked: string) =>
+    runExclusive(async () => {
+      const finishedSx = session?.exercises[state.currentExerciseIndex] ?? null;
+      const finishedSplitEx = finishedSx
+        ? split?.exercises.find((e) => e.exerciseId === finishedSx.exerciseId) ?? null
+        : null;
+      const parsed = parseMaskedNumber(weightMasked);
+      const changed =
+        finishedSx !== null &&
+        finishedSplitEx !== null &&
+        parsed !== null &&
+        parsed !== finishedSplitEx.workingWeightKg;
+      setError(null);
+      if (changed) {
+        try {
+          await updateExercise(finishedSplitEx.exerciseId, { workingWeightKg: parsed });
+          setSplit((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  exercises: prev.exercises.map((e) =>
+                    e.exerciseId === finishedSplitEx.exerciseId ? { ...e, workingWeightKg: parsed } : e
+                  ),
+                }
+              : prev
+          );
+          for (const set of finishedSx.sets) {
+            if (set.completedAt !== null) await editSet(set.id, { weightKg: parsed });
+          }
+        } catch (err) {
+          setError(apiErrorMessage(err, "Não foi possível salvar a carga."));
+          return;
+        }
+      }
+      nextExercise();
+    });
 
   const removeExercise = async (sxId: string) => {
     if (!split) return;
@@ -434,11 +433,7 @@ export function SplitEditorPage() {
   const planList = inProgress
     ? [...baseList.filter((e) => !isExerciseDone(e)), ...baseList.filter(isExerciseDone)]
     : baseList;
-  const muscleSummary = split
-    ? Array.from(new Set(split.exercises.map((ex) => ex.muscleGroup)))
-        .map((group) => MUSCLE_GROUP_LABELS[group])
-        .join(" · ")
-    : "";
+  const muscles = split ? muscleSummary(split.exercises) : "";
   const elapsedMs = inProgress && session ? now - new Date(session.startedAt).getTime() : 0;
 
   const interRestActive = inProgress && session !== null && state.phase === "interRest";
@@ -466,10 +461,11 @@ export function SplitEditorPage() {
       {split && (
         <div className={styles.hero}>
           <h1 className={styles.heroTitle}>{split.name}</h1>
-          {muscleSummary && <p className={styles.heroSubtitle}>{muscleSummary}</p>}
+          {muscles && <p className={styles.heroSubtitle}>{muscles}</p>}
         </div>
       )}
 
+      {bootError && <div className={styles.error}>{bootError}</div>}
       {error && <div className={styles.error}>{error}</div>}
       {loading && <p className={styles.loading}>Carregando…</p>}
 
@@ -485,12 +481,12 @@ export function SplitEditorPage() {
                 const match = sessionExerciseFor(exercise);
                 const sx = match?.sx ?? null;
                 const total = sx ? sx.sets.length : exercise.plannedSets.length;
-                const completed = sx ? sx.sets.filter((s) => s.completedAt !== null).length : 0;
+                const completed = sx ? completedSetsOf(sx) : 0;
                 const done = sx ? !hasPendingSets(sx) : false;
                 const isActive = match !== null && match.index === state.currentExerciseIndex;
                 const restingHere = isActive && state.phase === "resting";
                 const timeLabel = restingHere
-                  ? formatClock(remainingMs)
+                  ? formatClock(restRemainingMs)
                   : formatClock(defaultRestSeconds(exercise) * 1000);
                 return (
                   <div
@@ -523,13 +519,7 @@ export function SplitEditorPage() {
                           navigate(`/treino/divisoes/${id}/ex/${exercise.id}`);
                         }}
                       >
-                        <div className={styles.thumb}>
-                          {exercise.imageUrl ? (
-                            <img src={exercise.imageUrl} alt="" loading="lazy" style={imageFocalStyle(exercise)} />
-                          ) : (
-                            <DumbbellIcon className={styles.thumbIcon} />
-                          )}
-                        </div>
+                        <ExerciseThumb exercise={exercise} />
                         <div className={styles.info}>
                           <span className={styles.name}>{exercise.name}</span>
                           <span className={styles.meta}>
@@ -591,7 +581,11 @@ export function SplitEditorPage() {
 
                     {isActive && total > 0 && (
                       <div className={styles.stepperWrap}>
-                        <SetStepper total={total} completed={completed} restProgress={restingHere ? progress : null} />
+                        <SetStepper
+                          total={total}
+                          completed={completed}
+                          restProgress={restingHere ? restProgress : null}
+                        />
                       </div>
                     )}
                   </div>
@@ -634,13 +628,7 @@ export function SplitEditorPage() {
                       className={styles.pickerItem}
                       onClick={() => addExercise(exercise.id)}
                     >
-                      <div className={styles.pickerThumb}>
-                        {exercise.imageUrl ? (
-                          <img src={exercise.imageUrl} alt="" loading="lazy" style={imageFocalStyle(exercise)} />
-                        ) : (
-                          <DumbbellIcon className={styles.pickerThumbIcon} />
-                        )}
-                      </div>
+                      <ExerciseThumb exercise={exercise} size="sm" />
                       <div className={styles.info}>
                         <span className={styles.name}>{exercise.name}</span>
                         <span className={styles.meta}>{MUSCLE_GROUP_LABELS[exercise.muscleGroup]}</span>
@@ -691,14 +679,11 @@ export function SplitEditorPage() {
 
       {interRestActive && finishedSx && (
         <InterRestModal
-          endsAt={state.restEndsAt}
-          totalMs={state.restTotalMs}
+          remainingMs={restRemainingMs}
+          progress={restProgress}
           finishedName={finishedSx.exerciseName}
           initialWeight={numberToMask(finishedSplitEx?.workingWeightKg)}
-          onCueTick={cueTick}
-          onCueEnd={cueGo}
           onExtend={extendRest}
-          onCommitWeight={commitInterRestWeight}
           onDone={handleInterRestDone}
           saving={busy}
         />

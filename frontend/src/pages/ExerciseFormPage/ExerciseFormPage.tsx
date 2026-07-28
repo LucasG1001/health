@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { YouTubeEmbed } from "../../components/YouTubeEmbed/YouTubeEmbed";
@@ -68,14 +68,27 @@ export function ExerciseFormPage() {
     };
   }, [id]);
 
+  const previewRef = useRef<string | null>(null);
+  const createdIdRef = useRef<string | null>(null);
+
   const onPickImage = (file: File | null) => {
     if (!file) return;
     setImageFile(file);
-    setPreviewUrl(URL.createObjectURL(file));
+    if (previewRef.current) URL.revokeObjectURL(previewRef.current);
+    const next = URL.createObjectURL(file);
+    previewRef.current = next;
+    setPreviewUrl(next);
     setFocalX(50);
     setFocalY(50);
     setZoom(1);
   };
+
+  useEffect(
+    () => () => {
+      if (previewRef.current) URL.revokeObjectURL(previewRef.current);
+    },
+    []
+  );
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -95,12 +108,19 @@ export function ExerciseFormPage() {
       imageFocalY: focalY,
       imageZoom: zoom,
     };
+    let savedId = createdIdRef.current;
     try {
-      const saved = isEdit
-        ? await updateExercise(id!, payload)
-        : await createExercise(payload);
+      if (savedId === null) {
+        const saved = isEdit ? await updateExercise(id!, payload) : await createExercise(payload);
+        savedId = saved.id;
+        // O exercício já existe: sem guardar o id, uma falha no upload da imagem fazia
+        // o próximo "Cadastrar" criar uma segunda cópia.
+        if (!isEdit) createdIdRef.current = saved.id;
+      } else {
+        await updateExercise(savedId, payload);
+      }
       if (imageFile) {
-        await uploadExerciseImage(saved.id, imageFile);
+        await uploadExerciseImage(savedId, imageFile);
       }
       navigate("/treino/exercicios");
     } catch (err) {

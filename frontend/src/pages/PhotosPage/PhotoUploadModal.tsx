@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { Modal } from "../../components/Modal/Modal";
+import { PoseSelector } from "../../components/PoseSelector/PoseSelector";
 import { uploadPhoto } from "../../services/photoService";
 import { apiErrorMessage } from "../../utils/apiError";
 import { todayIso } from "../../utils/dateUtils";
 import type { PhotoPose } from "../../types/photo";
-import { POSE_LABELS } from "../../utils/format";
 import styles from "./PhotoUploadModal.module.css";
 
 interface OutletContextValue {
@@ -24,11 +24,23 @@ export function PhotoUploadModal() {
 
   const close = () => navigate("/medidas/fotos");
 
+  const previewRef = useRef<string | null>(null);
+
   const handleFile = (selected: File | null) => {
     setFile(selected);
-    if (preview) URL.revokeObjectURL(preview);
-    setPreview(selected ? URL.createObjectURL(selected) : null);
+    if (previewRef.current) URL.revokeObjectURL(previewRef.current);
+    const next = selected ? URL.createObjectURL(selected) : null;
+    previewRef.current = next;
+    setPreview(next);
   };
+
+  // Sem isto o último blob ficava vazado ao fechar o modal.
+  useEffect(
+    () => () => {
+      if (previewRef.current) URL.revokeObjectURL(previewRef.current);
+    },
+    []
+  );
 
   const handleSubmit = async () => {
     if (!file) {
@@ -57,27 +69,17 @@ export function PhotoUploadModal() {
         ) : (
           <span className={styles.filePlaceholder}>Toque para tirar ou escolher a foto</span>
         )}
+        {/* Sem `capture`: com ele o Android abre a câmera direto e o rótulo promete
+            "ou escolher", o que ficava impossível. */}
         <input
           type="file"
           accept="image/*"
-          capture="environment"
           onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
           hidden
         />
       </label>
 
-      <div className={styles.poseRow}>
-        {(Object.keys(POSE_LABELS) as PhotoPose[]).map((option) => (
-          <button
-            key={option}
-            type="button"
-            className={`${styles.poseChip} ${pose === option ? styles.poseActive : ""}`}
-            onClick={() => setPose(option)}
-          >
-            {POSE_LABELS[option]}
-          </button>
-        ))}
-      </div>
+      <PoseSelector value={pose} onChange={setPose} />
 
       <label className={styles.field}>
         <span className={styles.fieldLabel}>Data</span>

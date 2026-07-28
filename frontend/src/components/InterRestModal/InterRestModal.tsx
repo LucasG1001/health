@@ -1,43 +1,29 @@
 import { useState } from "react";
 import { NumericInput } from "../NumericInput/NumericInput";
-import { useRestTimer } from "../../hooks/useRestTimer";
 import { formatClock, formatKg } from "../../utils/format";
 import { parseMaskedNumber } from "../../utils/numberMask";
 import styles from "./InterRestModal.module.css";
 
 interface InterRestModalProps {
-  endsAt: number | null;
-  totalMs: number | null;
+  remainingMs: number;
+  progress: number;
   finishedName: string;
   initialWeight: string;
-  onCueTick: () => void;
-  onCueEnd: () => void;
   onExtend: () => void;
-  onCommitWeight: (weightMasked: string) => void;
   onDone: (weightMasked: string) => void;
   saving: boolean;
 }
 
 export function InterRestModal({
-  endsAt,
-  totalMs,
+  remainingMs,
+  progress,
   finishedName,
   initialWeight,
-  onCueTick,
-  onCueEnd,
   onExtend,
-  onCommitWeight,
   onDone,
   saving,
 }: InterRestModalProps) {
   const [weight, setWeight] = useState(initialWeight);
-
-  const { remainingMs, progress } = useRestTimer({
-    endsAt,
-    totalMs,
-    onTick: onCueTick,
-    onEnd: onCueEnd,
-  });
 
   const initialNum = parseMaskedNumber(initialWeight);
   const currentNum = parseMaskedNumber(weight);
@@ -56,12 +42,7 @@ export function InterRestModal({
 
       <label className={styles.field}>
         <span className={styles.fieldLabel}>Carga de {finishedName} (kg)</span>
-        <NumericInput
-          value={weight}
-          onChange={setWeight}
-          onBlur={() => onCommitWeight(weight)}
-          aria-label="Nova carga em kg"
-        />
+        <NumericInput value={weight} onChange={setWeight} aria-label="Nova carga em kg" />
         <span className={`${styles.hint} ${improved ? styles.hintImproved : ""}`}>
           {improved ? `+${formatKg(delta)} 💪` : "Aumentou a carga? Atualize aqui."}
         </span>

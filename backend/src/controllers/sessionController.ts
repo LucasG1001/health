@@ -50,12 +50,20 @@ export const update = asyncHandler("Erro ao atualizar o treino.", async (req, re
     respondValidationError(res, parsed.error);
     return;
   }
-  const updated = await sessionModel.updateNotes(String(req.params.id), parsed.data.notes ?? null);
-  if (!updated) {
+  // `notes` é nullish: sem este guard um PATCH com corpo vazio apagava as anotações.
+  if (parsed.data.notes !== undefined) {
+    const updated = await sessionModel.updateNotes(String(req.params.id), parsed.data.notes);
+    if (!updated) {
+      res.status(404).json({ error: "Treino não encontrado." });
+      return;
+    }
+  }
+  const session = await sessionModel.findById(String(req.params.id));
+  if (!session) {
     res.status(404).json({ error: "Treino não encontrado." });
     return;
   }
-  res.json(await sessionModel.findById(String(req.params.id)));
+  res.json(session);
 });
 
 export const finish = asyncHandler("Erro ao finalizar o treino.", async (req, res) => {
@@ -65,6 +73,10 @@ export const finish = asyncHandler("Erro ao finalizar o treino.", async (req, re
     return;
   }
   const session = await sessionModel.findById(String(req.params.id));
+  if (!session) {
+    res.status(404).json({ error: "Treino não encontrado." });
+    return;
+  }
   res.json({ session, summary });
 });
 

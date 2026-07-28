@@ -30,7 +30,6 @@ export async function migrate(): Promise<void> {
       sound_enabled         BOOLEAN NOT NULL DEFAULT TRUE,
       vibration_enabled     BOOLEAN NOT NULL DEFAULT TRUE,
       wake_lock_enabled     BOOLEAN NOT NULL DEFAULT TRUE,
-      rest_warmup_seconds   INTEGER NOT NULL DEFAULT 60,
       rest_working_seconds  INTEGER NOT NULL DEFAULT 90,
       created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -110,10 +109,6 @@ export async function migrate(): Promise<void> {
   `);
 
   await pool.query(`
-    ALTER TABLE exercises ADD COLUMN IF NOT EXISTS external_id TEXT;
-  `);
-
-  await pool.query(`
     ALTER TABLE exercises ADD COLUMN IF NOT EXISTS video_url TEXT;
   `);
 
@@ -131,31 +126,6 @@ export async function migrate(): Promise<void> {
 
   await pool.query(`
     ALTER TABLE exercises ADD COLUMN IF NOT EXISTS working_weight_kg NUMERIC(6,2);
-  `);
-
-  await pool.query(`
-    CREATE UNIQUE INDEX IF NOT EXISTS exercises_external_idx ON exercises (external_id)
-      WHERE external_id IS NOT NULL;
-  `);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS catalog_exercises (
-      id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      external_id   TEXT NOT NULL UNIQUE,
-      name          TEXT NOT NULL,
-      muscle_group  TEXT NOT NULL,
-      primary_muscle TEXT,
-      equipment     TEXT,
-      level         TEXT,
-      category      TEXT,
-      image_urls    TEXT[] NOT NULL DEFAULT '{}',
-      instructions  TEXT,
-      synced_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `);
-
-  await pool.query(`
-    CREATE INDEX IF NOT EXISTS catalog_exercises_group_idx ON catalog_exercises (muscle_group);
   `);
 
   await pool.query(`
@@ -187,21 +157,12 @@ export async function migrate(): Promise<void> {
   `);
 
   await pool.query(`
-    ALTER TABLE split_exercises ADD COLUMN IF NOT EXISTS working_weight_kg NUMERIC(6,2);
-  `);
-
-  await pool.query(`
     CREATE TABLE IF NOT EXISTS planned_sets (
       id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       split_exercise_id    UUID NOT NULL REFERENCES split_exercises(id) ON DELETE CASCADE,
       position             INTEGER NOT NULL DEFAULT 0,
-      set_type             TEXT NOT NULL DEFAULT 'working' CHECK (set_type IN ('warmup','working')),
-      variation            TEXT NOT NULL DEFAULT 'normal'
-                             CHECK (variation IN ('normal','drop_set','bi_set','superset','rest_pause')),
       target_reps_min      INTEGER NOT NULL,
       target_reps_max      INTEGER,
-      suggested_weight_kg  NUMERIC(6,2),
-      rest_seconds         INTEGER,
       created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
@@ -279,58 +240,26 @@ export async function migrate(): Promise<void> {
     CREATE INDEX IF NOT EXISTS session_sets_se_idx ON session_sets (session_exercise_id);
   `);
 
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS personal_records (
-      id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      exercise_id     UUID NOT NULL REFERENCES exercises(id) ON DELETE CASCADE,
-      session_id      UUID NOT NULL REFERENCES workout_sessions(id) ON DELETE CASCADE,
-      record_type     TEXT NOT NULL CHECK (record_type IN ('max_weight','max_set_volume')),
-      value           NUMERIC(10,2) NOT NULL,
-      previous_value  NUMERIC(10,2),
-      achieved_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `);
+  // Sobras de features removidas (ExerciseDB, PRs, gamificação) e de séries planejadas
+  // que nunca chegaram a ser gravadas. Nada abaixo tem leitor no código.
+  await pool.query(`DROP TABLE IF EXISTS user_badges;`);
+  await pool.query(`DROP TABLE IF EXISTS badges;`);
+  await pool.query(`DROP TABLE IF EXISTS personal_records;`);
+  await pool.query(`DROP TABLE IF EXISTS catalog_exercises;`);
+
+  await pool.query(`DROP INDEX IF EXISTS exercises_external_idx;`);
+  await pool.query(`ALTER TABLE exercises DROP COLUMN IF EXISTS external_id;`);
+
+  await pool.query(`ALTER TABLE split_exercises DROP COLUMN IF EXISTS working_weight_kg;`);
 
   await pool.query(`
-    CREATE INDEX IF NOT EXISTS personal_records_ex_idx ON personal_records (exercise_id, record_type);
+    ALTER TABLE planned_sets
+      DROP COLUMN IF EXISTS set_type,
+      DROP COLUMN IF EXISTS variation,
+      DROP COLUMN IF EXISTS suggested_weight_kg,
+      DROP COLUMN IF EXISTS rest_seconds;
   `);
 
-  await pool.query(`
-    CREATE INDEX IF NOT EXISTS personal_records_session_idx ON personal_records (session_id);
-  `);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS badges (
-      id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      code         TEXT NOT NULL UNIQUE,
-      name         TEXT NOT NULL,
-      description  TEXT NOT NULL,
-      icon         TEXT NOT NULL,
-      category     TEXT NOT NULL CHECK (category IN ('sessions','streak','pr','volume')),
-      threshold    NUMERIC(12,2) NOT NULL,
-      created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS user_badges (
-      id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      badge_id    UUID NOT NULL UNIQUE REFERENCES badges(id) ON DELETE CASCADE,
-      session_id  UUID REFERENCES workout_sessions(id) ON DELETE SET NULL,
-      awarded_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `);
-
-  // Seed a carga global do exercício a partir de cargas já definidas por treino (uma vez).
-  await pool.query(`
-    UPDATE exercises e
-       SET working_weight_kg = sub.w
-      FROM (
-        SELECT exercise_id, MAX(working_weight_kg) AS w
-          FROM split_exercises
-         WHERE working_weight_kg IS NOT NULL
-         GROUP BY exercise_id
-      ) sub
-     WHERE e.id = sub.exercise_id AND e.working_weight_kg IS NULL;
-  `);
+  // Aquecimento planejado não existe, então este descanso nunca era aplicado.
+  await pool.query(`ALTER TABLE settings DROP COLUMN IF EXISTS rest_warmup_seconds;`);
 }

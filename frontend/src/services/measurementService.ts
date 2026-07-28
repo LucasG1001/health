@@ -6,10 +6,6 @@ export async function fetchMeasurements(range?: { from?: string; to?: string }):
   return response.data;
 }
 
-export async function fetchLatestMeasurement(): Promise<Measurement | null> {
-  const response = await api.get<Measurement | null>("/api/measurements/latest");
-  return response.data;
-}
 
 export async function createMeasurement(input: MeasurementInput): Promise<Measurement> {
   const response = await api.post<Measurement>("/api/measurements", input);

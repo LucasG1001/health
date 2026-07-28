@@ -7,6 +7,7 @@ import { fileURLToPath } from "url";
 import express from "express";
 import cors from "cors";
 import { migrate } from "./database/migrate.js";
+import { pool } from "./database/connection.js";
 import { ensureUploadDirs, UPLOAD_DIR } from "./lib/upload.js";
 import { profileRoutes } from "./routes/profileRoutes.js";
 import { settingsRoutes } from "./routes/settingsRoutes.js";
@@ -63,9 +64,18 @@ app.use(errorHandler);
 async function start(): Promise<void> {
   ensureUploadDirs();
   await migrate();
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     process.stdout.write(`Health backend rodando em http://localhost:${PORT}\n`);
   });
+
+  const shutdown = (signal: string) => {
+    process.stdout.write(`\n${signal} recebido, encerrando…\n`);
+    server.close(() => {
+      pool.end().finally(() => process.exit(0));
+    });
+  };
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
 }
 
 start().catch((error) => {

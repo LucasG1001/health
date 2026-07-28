@@ -1,6 +1,5 @@
 import { z } from "zod";
-
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+import { isoDate } from "./common.js";
 
 const measurementFields = {
   weightKg: z.number().positive("Peso inválido.").max(500, "Peso inválido.").nullish(),
@@ -14,12 +13,12 @@ const measurementFields = {
 };
 
 export const createMeasurementSchema = z.object({
-  measuredOn: z.string().regex(DATE_RE, "Data inválida (use YYYY-MM-DD)."),
+  measuredOn: isoDate("Data inválida (use YYYY-MM-DD)."),
   ...measurementFields,
 });
 
 export const updateMeasurementSchema = z.object({
-  measuredOn: z.string().regex(DATE_RE, "Data inválida (use YYYY-MM-DD).").optional(),
+  measuredOn: isoDate("Data inválida (use YYYY-MM-DD).").optional(),
   ...measurementFields,
 });
 

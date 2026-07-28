@@ -22,3 +22,23 @@ export function parseMaskedNumber(masked: string, decimals = 1): number | null {
   const parsed = Number(digits) / 10 ** decimals;
   return Number.isNaN(parsed) ? null : parsed;
 }
+
+/** Devolvido por parseOptionalInteger quando o texto não é um inteiro válido. */
+export const INVALID = Symbol("invalid");
+
+/**
+ * Campo inteiro opcional: vazio é null (limpar o valor), texto inválido é INVALID —
+ * para que a tela recuse o save em vez de gravar null ou omitir o campo em silêncio.
+ */
+export function parseOptionalInteger(raw: string, min = 0): number | null | typeof INVALID {
+  const trimmed = raw.trim();
+  if (trimmed === "") return null;
+  if (!/^\d+$/.test(trimmed)) return INVALID;
+  const parsed = Number(trimmed);
+  return Number.isSafeInteger(parsed) && parsed >= min ? parsed : INVALID;
+}
+
+export function parseRequiredInteger(raw: string, min = 0): number | typeof INVALID {
+  const parsed = parseOptionalInteger(raw, min);
+  return parsed === null ? INVALID : parsed;
+}

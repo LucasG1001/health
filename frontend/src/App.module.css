@@ -18,6 +18,19 @@
   margin-left: var(--sidebar-collapsed);
 }
 
+.notFoundLink {
+  display: inline-flex;
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-radius: var(--radius-md);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font-weight: var(--font-weight-semibold);
+}
+
+.notFoundLink:hover {
+  background: var(--color-accent-hover);
+}
+
 @media (max-width: 768px) {
   .content,
   .contentCollapsed {

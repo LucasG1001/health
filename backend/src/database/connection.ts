@@ -9,6 +9,28 @@ pg.types.setTypeParser(pg.types.builtins.INT8, (value) => parseInt(value, 10));
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
+  max: 10,
+  idleTimeoutMillis: 30_000,
+  connectionTimeoutMillis: 5_000,
+  statement_timeout: 15_000,
 });
+
+// Sem este listener, um erro em conexão ociosa (restart do Postgres, queda de rede)
+// é emitido como 'error' sem tratamento e derruba o processo.
+pool.on("error", (error) => {
+  console.error("Erro em conexão ociosa do pool:", error);
+});
+
+/**
+ * ROLLBACK que não substitui o erro original: se a conexão já caiu, o próprio
+ * ROLLBACK rejeita e mascararia a causa real da falha.
+ */
+export async function rollback(client: pg.PoolClient): Promise<void> {
+  try {
+    await client.query("ROLLBACK");
+  } catch (error) {
+    console.error("Falha ao executar ROLLBACK:", error);
+  }
+}
 
 export { pool };

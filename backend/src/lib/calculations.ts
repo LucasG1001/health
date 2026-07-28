@@ -1,3 +1,4 @@
+import { todayLocalIso } from "./dateUtils.js";
 import type { ActivityLevel, BiologicalSex } from "../types/profile.js";
 
 const ACTIVITY_FACTORS: Record<ActivityLevel, number> = {
@@ -8,12 +9,12 @@ const ACTIVITY_FACTORS: Record<ActivityLevel, number> = {
   athlete: 1.9,
 };
 
-export function calcAge(birthDate: string, today: Date = new Date()): number {
-  const [year, month, day] = birthDate.split("-").map(Number);
-  let age = today.getFullYear() - (year ?? 0);
-  const beforeBirthday =
-    today.getMonth() + 1 < (month ?? 1) ||
-    (today.getMonth() + 1 === (month ?? 1) && today.getDate() < (day ?? 1));
+/** `onIso` em YYYY-MM-DD; o padrão é hoje no fuso da aplicação, não no do processo. */
+export function calcAge(birthDate: string, onIso: string = todayLocalIso()): number {
+  const [birthYear = 0, birthMonth = 1, birthDay = 1] = birthDate.split("-").map(Number);
+  const [year = 0, month = 1, day = 1] = onIso.split("-").map(Number);
+  let age = year - birthYear;
+  const beforeBirthday = month < birthMonth || (month === birthMonth && day < birthDay);
   if (beforeBirthday) age -= 1;
   return age;
 }
@@ -59,13 +60,15 @@ export function deriveBodyMetrics(params: {
   birthDate: string | null;
   biologicalSex: BiologicalSex | null;
   activityLevel: ActivityLevel | null;
+  /** Data da medição (YYYY-MM-DD): a idade usada é a da época, não a de hoje. */
+  onIso?: string;
 }): BodyDerived {
-  const { weightKg, heightCm, birthDate, biologicalSex, activityLevel } = params;
-  const bmi = weightKg && heightCm ? calcBmi(weightKg, heightCm) : null;
+  const { weightKg, heightCm, birthDate, biologicalSex, activityLevel, onIso } = params;
+  const bmi = weightKg != null && heightCm != null && heightCm > 0 ? calcBmi(weightKg, heightCm) : null;
   const bmr =
-    weightKg && heightCm && birthDate && biologicalSex
-      ? calcBmr(weightKg, heightCm, calcAge(birthDate), biologicalSex)
+    weightKg != null && heightCm != null && birthDate != null && biologicalSex != null
+      ? calcBmr(weightKg, heightCm, calcAge(birthDate, onIso), biologicalSex)
       : null;
-  const tdee = bmr && activityLevel ? calcTdee(bmr, activityLevel) : null;
+  const tdee = bmr != null && activityLevel != null ? calcTdee(bmr, activityLevel) : null;
   return { bmi, bmr, tdee };
 }

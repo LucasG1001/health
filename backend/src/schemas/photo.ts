@@ -1,10 +1,10 @@
 import { z } from "zod";
-
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+import { isoDate } from "./common.js";
+import { PHOTO_POSES } from "../types/photo.js";
 
 export const createPhotoSchema = z.object({
-  takenOn: z.string().regex(DATE_RE, "Data inválida (use YYYY-MM-DD)."),
-  pose: z.enum(["front", "side", "back"], "Pose inválida (use front, side ou back)."),
+  takenOn: isoDate("Data inválida (use YYYY-MM-DD)."),
+  pose: z.enum(PHOTO_POSES, "Pose inválida (use front, side ou back)."),
   notes: z.string().max(2000).nullish(),
 });
 

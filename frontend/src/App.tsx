@@ -1,8 +1,11 @@
 import { useState } from "react";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Link, Navigate, Route, Routes } from "react-router-dom";
 import { WorkoutSessionProvider } from "./context/WorkoutSessionContext";
 import { Sidebar } from "./components/Sidebar/Sidebar";
 import { ActiveSessionBar } from "./components/ActiveSessionBar/ActiveSessionBar";
+import { EmptyState } from "./components/EmptyState/EmptyState";
+import { ErrorBoundary } from "./components/ErrorBoundary/ErrorBoundary";
+import { DumbbellIcon } from "./components/Icon/icons";
 import { MeasuresPage } from "./pages/MeasuresPage/MeasuresPage";
 import { MeasurementFormModal } from "./pages/MeasuresPage/MeasurementFormModal";
 import { MeasurementHistoryPage } from "./pages/MeasurementHistoryPage/MeasurementHistoryPage";
@@ -30,12 +33,12 @@ function Layout() {
     () => localStorage.getItem(SIDEBAR_STORAGE_KEY) === "true"
   );
 
+  // O localStorage.setItem ficava dentro do updater, que precisa ser puro (pode ser
+  // reexecutado pelo React).
   const toggleSidebar = () => {
-    setCollapsed((prev) => {
-      const next = !prev;
-      localStorage.setItem(SIDEBAR_STORAGE_KEY, String(next));
-      return next;
-    });
+    const next = !collapsed;
+    setCollapsed(next);
+    localStorage.setItem(SIDEBAR_STORAGE_KEY, String(next));
   };
 
   return (
@@ -68,6 +71,7 @@ function Layout() {
           <Route path="/treino/historico" element={<HistoryPage />} />
           <Route path="/treino/historico/:id" element={<SessionDetailPage />} />
           <Route path="/configuracoes" element={<SettingsPage />} />
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </main>
       <ActiveSessionBar />
@@ -75,15 +79,32 @@ function Layout() {
   );
 }
 
+function NotFoundPage() {
+  return (
+    <EmptyState
+      icon={<DumbbellIcon />}
+      title="Página não encontrada"
+      description="O endereço acessado não existe."
+      action={
+        <Link to="/treino" className={styles.notFoundLink}>
+          Ir para o treino
+        </Link>
+      }
+    />
+  );
+}
+
 function App() {
   return (
-    <BrowserRouter>
-      <WorkoutSessionProvider>
-        <Routes>
-          <Route path="*" element={<Layout />} />
-        </Routes>
-      </WorkoutSessionProvider>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <WorkoutSessionProvider>
+          <Routes>
+            <Route path="*" element={<Layout />} />
+          </Routes>
+        </WorkoutSessionProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }
 

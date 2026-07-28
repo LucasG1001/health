@@ -1,6 +1,8 @@
 import { pool } from "../database/connection.js";
 import { buildUpdateSet } from "../lib/sqlUpdate.js";
 import { calcEpley1Rm } from "../lib/calculations.js";
+import { APP_TIMEZONE } from "../lib/dateUtils.js";
+import { isUniqueViolation } from "../lib/pgError.js";
 import { DuplicateExerciseError } from "./errors.js";
 import type {
   Exercise,
@@ -11,8 +13,6 @@ import type {
   MuscleGroup,
   NewExercise,
 } from "../types/exercise.js";
-
-const UNIQUE_VIOLATION = "23505";
 
 export function resolveImageUrl(row: { image_path: string | null; image_url: string | null }): string | null {
   if (row.image_path) return `/uploads/${row.image_path}`;
@@ -34,7 +34,6 @@ function toExercise(row: ExerciseRow): Exercise {
     machineSetting: row.machine_setting,
     notes: row.notes,
     videoUrl: row.video_url,
-    externalId: row.external_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -62,8 +61,8 @@ export async function findById(id: string): Promise<Exercise | null> {
 export async function create(entry: NewExercise): Promise<Exercise> {
   try {
     const result = await pool.query<ExerciseRow>(
-      `INSERT INTO exercises (name, muscle_group, equipment, image_url, machine_setting, notes, video_url, external_id, image_path, image_focal_x, image_focal_y, image_zoom, working_weight_kg)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      `INSERT INTO exercises (name, muscle_group, equipment, image_url, machine_setting, notes, video_url, image_focal_x, image_focal_y, image_zoom, working_weight_kg)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING *`,
       [
         entry.name,
@@ -73,8 +72,6 @@ export async function create(entry: NewExercise): Promise<Exercise> {
         entry.machineSetting ?? null,
         entry.notes ?? null,
         entry.videoUrl ?? null,
-        entry.externalId ?? null,
-        entry.imagePath ?? null,
         entry.imageFocalX ?? 50,
         entry.imageFocalY ?? 50,
         entry.imageZoom ?? 1,
@@ -83,9 +80,7 @@ export async function create(entry: NewExercise): Promise<Exercise> {
     );
     return toExercise(result.rows[0]!);
   } catch (error) {
-    if (error instanceof Error && "code" in error && error.code === UNIQUE_VIOLATION) {
-      throw new DuplicateExerciseError();
-    }
+    if (isUniqueViolation(error)) throw new DuplicateExerciseError();
     throw error;
   }
 }
@@ -117,9 +112,7 @@ export async function update(id: string, patch: ExercisePatch): Promise<Exercise
     );
     return result.rows[0] ? toExercise(result.rows[0]) : null;
   } catch (error) {
-    if (error instanceof Error && "code" in error && error.code === UNIQUE_VIOLATION) {
-      throw new DuplicateExerciseError();
-    }
+    if (isUniqueViolation(error)) throw new DuplicateExerciseError();
     throw error;
   }
 }
@@ -155,13 +148,6 @@ export async function remove(id: string): Promise<{ imagePath: string | null } |
   return { imagePath: result.rows[0].image_path };
 }
 
-export async function updateMachineSetting(id: string, machineSetting: string | null): Promise<boolean> {
-  const result = await pool.query(
-    "UPDATE exercises SET machine_setting = $2, updated_at = NOW() WHERE id = $1",
-    [id, machineSetting]
-  );
-  return (result.rowCount ?? 0) > 0;
-}
 
 interface LastPerformanceSetRow {
   set_type: string;
@@ -171,13 +157,14 @@ interface LastPerformanceSetRow {
 
 export async function lastPerformance(exerciseId: string): Promise<LastPerformance | null> {
   const latest = await pool.query<{ session_id: string; session_exercise_id: string; date: string }>(
-    `SELECT ws.id AS session_id, se.id AS session_exercise_id, ws.started_at::date::text AS date
+    `SELECT ws.id AS session_id, se.id AS session_exercise_id,
+            (ws.started_at AT TIME ZONE $2)::date::text AS date
        FROM workout_sessions ws
        JOIN session_exercises se ON se.session_id = ws.id
       WHERE se.exercise_id = $1 AND ws.status = 'completed'
       ORDER BY ws.started_at DESC
       LIMIT 1`,
-    [exerciseId]
+    [exerciseId, APP_TIMEZONE]
   );
   const head = latest.rows[0];
   if (!head) return null;
@@ -216,32 +203,39 @@ export async function history(
   from: string | null,
   to: string | null
 ): Promise<ExerciseHistoryPoint[]> {
-  const values: unknown[] = [exerciseId];
+  const values: unknown[] = [exerciseId, APP_TIMEZONE];
   const conditions: string[] = [];
   if (from) {
     values.push(from);
-    conditions.push(`ws.started_at::date >= $${values.length}`);
+    conditions.push(`(ws.started_at AT TIME ZONE $2)::date >= $${values.length}`);
   }
   if (to) {
     values.push(to);
-    conditions.push(`ws.started_at::date <= $${values.length}`);
+    conditions.push(`(ws.started_at AT TIME ZONE $2)::date <= $${values.length}`);
   }
   const extraWhere = conditions.length ? `AND ${conditions.join(" AND ")}` : "";
 
+  // O filtro de série válida está no JOIN para que todas as métricas do ponto — inclusive
+  // o par (peso, reps) do melhor 1RM — venham do mesmo conjunto de séries. A ordenação
+  // termina em ss.id para ser total: sem isso, em empate os dois ARRAY_AGG podiam
+  // escolher linhas diferentes e devolver um par que nunca existiu.
   const result = await pool.query<HistoryRow>(
     `SELECT ws.id AS session_id,
-            ws.started_at::date::text AS date,
-            MAX(ss.weight_kg) FILTER (WHERE ss.set_type = 'working') AS max_weight_kg,
-            SUM(ss.weight_kg * ss.reps) FILTER (WHERE ss.set_type = 'working') AS total_volume_kg,
-            COUNT(*) FILTER (WHERE ss.set_type = 'working')::int AS working_sets,
-            (ARRAY_AGG(ss.weight_kg ORDER BY ss.weight_kg * (1 + ss.reps / 30.0) DESC NULLS LAST))[1] AS best_weight_kg,
-            (ARRAY_AGG(ss.reps ORDER BY ss.weight_kg * (1 + ss.reps / 30.0) DESC NULLS LAST))[1] AS best_reps
+            (ws.started_at AT TIME ZONE $2)::date::text AS date,
+            MAX(ss.weight_kg) AS max_weight_kg,
+            SUM(ss.weight_kg * ss.reps) AS total_volume_kg,
+            COUNT(*)::int AS working_sets,
+            (ARRAY_AGG(ss.weight_kg
+              ORDER BY ss.weight_kg * (1 + ss.reps / 30.0) DESC, ss.id))[1] AS best_weight_kg,
+            (ARRAY_AGG(ss.reps
+              ORDER BY ss.weight_kg * (1 + ss.reps / 30.0) DESC, ss.id))[1] AS best_reps
        FROM workout_sessions ws
        JOIN session_exercises se ON se.session_id = ws.id AND se.exercise_id = $1
        JOIN session_sets ss ON ss.session_exercise_id = se.id
+        AND ss.set_type = 'working'
         AND ss.completed_at IS NOT NULL AND ss.weight_kg IS NOT NULL AND ss.reps IS NOT NULL
       WHERE ws.status = 'completed' ${extraWhere}
-      GROUP BY ws.id
+      GROUP BY ws.id, ws.started_at
       ORDER BY ws.started_at ASC`,
     values
   );

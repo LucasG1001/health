@@ -1,6 +1,8 @@
 import { useState, type ComponentType } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useWorkoutSession } from "../../context/workoutSessionStore";
+import { Modal } from "../Modal/Modal";
+import { apiErrorMessage } from "../../utils/apiError";
 import styles from "./Sidebar.module.css";
 import { DumbbellIcon, GearIcon, PlusIcon, RulerIcon, StopIcon } from "../Icon/icons";
 
@@ -29,6 +31,8 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const sessionActive = state.session !== null && state.session.status === "in_progress";
 
   const [endOpen, setEndOpen] = useState(false);
+  const [endError, setEndError] = useState<string | null>(null);
+  const [ending, setEnding] = useState(false);
 
   const onWorkoutArea = location.pathname.startsWith("/treino");
   const endMode = onWorkoutArea && sessionActive;
@@ -43,31 +47,37 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
   const handleFab = () => {
     if (endMode) {
+      setEndError(null);
       setEndOpen(true);
     } else {
       handleAdd();
     }
   };
 
-  const handleFinish = async () => {
-    setEndOpen(false);
-    const sessionId = state.session?.id;
+  // A gaveta só fecha quando a ação dá certo: antes o erro ia para o console e o
+  // usuário achava que o treino tinha sido finalizado.
+  const runEndAction = async (action: () => Promise<void>, failureMessage: string) => {
+    if (ending) return;
+    setEnding(true);
+    setEndError(null);
     try {
-      const { summary } = await finish();
-      if (sessionId) navigate(`/treino/sessao/${sessionId}/resumo`, { replace: true, state: { summary } });
+      await action();
+      setEndOpen(false);
     } catch (err) {
-      console.error(err);
+      setEndError(apiErrorMessage(err, failureMessage));
+    } finally {
+      setEnding(false);
     }
   };
 
-  const handleDiscard = async () => {
-    setEndOpen(false);
-    try {
-      await discard();
-    } catch (err) {
-      console.error(err);
-    }
-  };
+  const handleFinish = () =>
+    runEndAction(async () => {
+      const sessionId = state.session?.id;
+      const { summary } = await finish();
+      if (sessionId) navigate(`/treino/sessao/${sessionId}/resumo`, { replace: true, state: { summary } });
+    }, "Não foi possível finalizar o treino.");
+
+  const handleDiscard = () => runEndAction(discard, "Não foi possível descartar o treino.");
 
   const FabIcon = endMode ? StopIcon : PlusIcon;
 
@@ -139,20 +149,15 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       </nav>
 
       {endOpen && (
-        <div className={styles.endBackdrop} onClick={(e) => e.target === e.currentTarget && setEndOpen(false)}>
-          <div className={styles.endSheet}>
-            <h2 className={styles.endTitle}>Encerrar treino?</h2>
-            <button type="button" className={styles.finalizeButton} onClick={handleFinish}>
-              Finalizar treino
-            </button>
-            <button type="button" className={styles.discardButton} onClick={handleDiscard}>
-              Descartar treino
-            </button>
-            <button type="button" className={styles.cancelButton} onClick={() => setEndOpen(false)}>
-              Continuar treinando
-            </button>
-          </div>
-        </div>
+        <Modal title="Encerrar treino?" onClose={() => setEndOpen(false)}>
+          {endError && <p className={styles.endError}>{endError}</p>}
+          <button type="button" className={styles.finalizeButton} onClick={handleFinish} disabled={ending}>
+            {ending ? "Encerrando…" : "Finalizar treino"}
+          </button>
+          <button type="button" className={styles.discardButton} onClick={handleDiscard} disabled={ending}>
+            Descartar treino
+          </button>
+        </Modal>
       )}
     </aside>
   );

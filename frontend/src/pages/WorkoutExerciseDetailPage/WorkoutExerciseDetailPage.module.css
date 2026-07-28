@@ -25,10 +25,10 @@
   overflow: hidden;
   background: repeating-linear-gradient(
     45deg,
-    rgba(139, 92, 246, 0.16) 0,
-    rgba(139, 92, 246, 0.16) 16px,
-    rgba(139, 92, 246, 0.28) 16px,
-    rgba(139, 92, 246, 0.28) 32px
+    var(--color-accent-subtle) 0,
+    var(--color-accent-subtle) 16px,
+    var(--color-accent-muted) 16px,
+    var(--color-accent-muted) 32px
   );
   border: 1px solid var(--color-border-subtle);
 }

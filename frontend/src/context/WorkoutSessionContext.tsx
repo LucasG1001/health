@@ -3,19 +3,41 @@ import {
   initialSessionState,
   sessionReducer,
   toSnapshot,
+  type SessionPhase,
   type SessionSnapshot,
 } from "../utils/sessionMachine";
+import { apiErrorMessage } from "../utils/apiError";
 import * as sessionService from "../services/sessionService";
-import * as exerciseService from "../services/exerciseService";
+import { useSettings } from "../hooks/useSettings";
+import { useAudioCue } from "../hooks/useAudioCue";
+import { useRestTimer } from "../hooks/useRestTimer";
+import { useWakeLock } from "../hooks/useWakeLock";
 import { WorkoutSessionContext, type WorkoutSessionContextValue } from "./workoutSessionStore";
-import type { SetType, SetVariation } from "../types/split";
 
-const SNAPSHOT_KEY = "health.activeSession.v1";
+// v2: o snapshot perdeu o campo prepareCued; a chave nova evita ler o formato antigo.
+const SNAPSHOT_KEY = "health.activeSession.v2";
+
+const PHASES: SessionPhase[] = ["idle", "overview", "exercising", "resting", "interRest", "exerciseDone"];
+
+function isSnapshot(value: unknown): value is SessionSnapshot {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.sessionId === "string" &&
+    PHASES.includes(candidate.phase as SessionPhase) &&
+    typeof candidate.currentExerciseIndex === "number" &&
+    typeof candidate.currentSetIndex === "number" &&
+    (candidate.restEndsAt === null || typeof candidate.restEndsAt === "number") &&
+    (candidate.restTotalMs === null || typeof candidate.restTotalMs === "number")
+  );
+}
 
 function readSnapshot(): SessionSnapshot | null {
   try {
     const raw = localStorage.getItem(SNAPSHOT_KEY);
-    return raw ? (JSON.parse(raw) as SessionSnapshot) : null;
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    return isSnapshot(parsed) ? parsed : null;
   } catch {
     return null;
   }
@@ -24,6 +46,8 @@ function readSnapshot(): SessionSnapshot | null {
 export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(sessionReducer, initialSessionState);
   const [hydrating, setHydrating] = useState(true);
+  const [bootError, setBootError] = useState<string | null>(null);
+  const { settings } = useSettings();
 
   useEffect(() => {
     const snapshot = readSnapshot();
@@ -38,7 +62,9 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
           localStorage.removeItem(SNAPSHOT_KEY);
         }
       })
-      .catch(() => undefined)
+      .catch((err) => {
+        if (active) setBootError(apiErrorMessage(err, "Não foi possível recuperar o treino em andamento."));
+      })
       .finally(() => {
         if (active) setHydrating(false);
       });
@@ -52,13 +78,17 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
     const snapshot = toSnapshot(state);
     if (snapshot) {
       localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(snapshot));
-    } else {
-      localStorage.removeItem(SNAPSHOT_KEY);
+      return;
     }
-  }, [state, hydrating]);
+    // Se o boot falhou não sabemos se existe sessão ativa no servidor; apagar o snapshot
+    // aqui perderia fase e restEndsAt de uma sessão que continua viva.
+    if (bootError !== null && state.session === null) return;
+    localStorage.removeItem(SNAPSHOT_KEY);
+  }, [state, hydrating, bootError]);
 
   const start = useCallback(async (splitId: string) => {
     const session = await sessionService.startSession(splitId);
+    setBootError(null);
     dispatch({ type: "START", session });
     return session;
   }, []);
@@ -97,10 +127,28 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
 
   const skipRest = useCallback(() => dispatch({ type: "SKIP_REST" }), []);
   const extendRest = useCallback(() => dispatch({ type: "EXTEND_REST", ms: 15000 }), []);
-  const restEnded = useCallback(() => dispatch({ type: "REST_ENDED" }), []);
-  const prepareCued = useCallback(() => dispatch({ type: "PREPARE_CUED" }), []);
   const nextExercise = useCallback(() => dispatch({ type: "NEXT_EXERCISE" }), []);
-  const backToOverview = useCallback(() => dispatch({ type: "BACK_TO_OVERVIEW" }), []);
+
+  // O descanso é cronometrado aqui, e não na tela do treino: sair da SplitEditorPage no meio
+  // do descanso não pode interromper a contagem, os cues nem o wake lock.
+  const resting = state.phase === "resting" || state.phase === "interRest";
+  const { unlock, cueTick, cueGo } = useAudioCue({
+    soundEnabled: settings?.soundEnabled ?? true,
+    vibrationEnabled: settings?.vibrationEnabled ?? true,
+  });
+  const handleRestEnd = useCallback(() => {
+    cueGo();
+    // Na fase interRest o modal segue aberto aguardando a confirmação da carga; só o
+    // descanso entre séries avança sozinho.
+    if (state.phase === "resting") dispatch({ type: "REST_ENDED" });
+  }, [cueGo, state.phase]);
+  const { remainingMs: restRemainingMs, progress: restProgress } = useRestTimer({
+    endsAt: resting ? state.restEndsAt : null,
+    totalMs: state.restTotalMs,
+    onTick: cueTick,
+    onEnd: handleRestEnd,
+  });
+  useWakeLock((settings?.wakeLockEnabled ?? true) && state.session?.status === "in_progress");
 
   const editSet = useCallback(
     async (
@@ -113,47 +161,10 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
     []
   );
 
-  const addExtraSet = useCallback(
-    async (sessionExerciseId: string, input?: { setType?: SetType; variation?: SetVariation }) => {
-      const set = await sessionService.addSessionSet(sessionExerciseId, input ?? {});
-      dispatch({ type: "SET_ADDED", exerciseId: sessionExerciseId, set });
-      return set;
-    },
-    []
-  );
-
-  const removeSet = useCallback(async (setId: string) => {
-    await sessionService.deleteSessionSet(setId);
-    dispatch({ type: "SET_REMOVED", setId });
-  }, []);
-
-  const addExercise = useCallback(
-    async (exerciseId: string) => {
-      if (!state.session) return;
-      const exercise = await sessionService.addSessionExercise(state.session.id, exerciseId);
-      dispatch({ type: "EXERCISE_ADDED", exercise });
-    },
-    [state.session]
-  );
-
   const removeExercise = useCallback(async (sessionExerciseId: string) => {
     await sessionService.removeSessionExercise(sessionExerciseId);
     dispatch({ type: "EXERCISE_REMOVED", exerciseId: sessionExerciseId });
   }, []);
-
-  const updateMachineSetting = useCallback(async (exerciseId: string, machineSetting: string | null) => {
-    await exerciseService.updateExercise(exerciseId, { machineSetting });
-    dispatch({ type: "MACHINE_SETTING_UPDATED", exerciseId, machineSetting });
-  }, []);
-
-  const updateNotes = useCallback(
-    async (notes: string | null) => {
-      if (!state.session) return;
-      await sessionService.updateSessionNotes(state.session.id, notes);
-      dispatch({ type: "NOTES_UPDATED", notes });
-    },
-    [state.session]
-  );
 
   const finish = useCallback(async () => {
     if (!state.session) throw new Error("Nenhum treino em andamento.");
@@ -172,44 +183,36 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
     () => ({
       state,
       hydrating,
+      bootError,
+      restRemainingMs,
+      restProgress,
+      unlock,
       start,
       playExercise,
       completeSet,
       skipRest,
       extendRest,
-      restEnded,
-      prepareCued,
       nextExercise,
-      backToOverview,
       editSet,
-      addExtraSet,
-      removeSet,
-      addExercise,
       removeExercise,
-      updateMachineSetting,
-      updateNotes,
       finish,
       discard,
     }),
     [
       state,
       hydrating,
+      bootError,
+      restRemainingMs,
+      restProgress,
+      unlock,
       start,
       playExercise,
       completeSet,
       skipRest,
       extendRest,
-      restEnded,
-      prepareCued,
       nextExercise,
-      backToOverview,
       editSet,
-      addExtraSet,
-      removeSet,
-      addExercise,
       removeExercise,
-      updateMachineSetting,
-      updateNotes,
       finish,
       discard,
     ]

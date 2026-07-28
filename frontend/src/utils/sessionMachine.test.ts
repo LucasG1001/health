@@ -87,7 +87,6 @@ describe("sessionReducer", () => {
     });
     expect(next.phase).toBe("resting");
     expect(next.restEndsAt).toBe(now + 60000);
-    expect(next.prepareCued).toBe(false);
   });
 
   it("vai para exerciseDone ao completar a última série do exercício", () => {
@@ -260,12 +259,10 @@ describe("sessionReducer", () => {
         currentSetIndex: 1,
         restEndsAt: 123456,
         restTotalMs: 60000,
-        prepareCued: true,
       },
     });
     expect(state.phase).toBe("resting");
     expect(state.restEndsAt).toBe(123456);
-    expect(state.prepareCued).toBe(true);
   });
 
   it("HYDRATE ignora snapshot de outra sessão", () => {
@@ -280,10 +277,67 @@ describe("sessionReducer", () => {
         currentSetIndex: 1,
         restEndsAt: 123456,
         restTotalMs: 60000,
-        prepareCued: false,
       },
     });
     expect(state.phase).toBe("overview");
     expect(state.restEndsAt).toBeNull();
+  });
+
+  it("HYDRATE limita currentSetIndex às séries existentes", () => {
+    const session = makeSession();
+    const state = sessionReducer(initialSessionState, {
+      type: "HYDRATE",
+      session,
+      snapshot: {
+        sessionId: "session-1",
+        phase: "exercising",
+        currentExerciseIndex: 1,
+        currentSetIndex: 7,
+        restEndsAt: null,
+        restTotalMs: null,
+      },
+    });
+    expect(state.currentExerciseIndex).toBe(1);
+    expect(state.currentSetIndex).toBe(0);
+  });
+
+  it("SET_UPDATED vai para exerciseDone quando as séries do exercício atual acabam", () => {
+    let state = startedState();
+    state = sessionReducer(state, { type: "SET_UPDATED", set: makeSet("set-1", true) });
+    expect(state.phase).toBe("exercising");
+    state = sessionReducer(state, { type: "SET_UPDATED", set: makeSet("set-2", true) });
+    expect(state.phase).toBe("exerciseDone");
+    expect(state.restEndsAt).toBeNull();
+  });
+
+  it("SET_UPDATED reabre o exercício quando uma série volta a ficar pendente", () => {
+    let state = startedState();
+    state = sessionReducer(state, { type: "SET_UPDATED", set: makeSet("set-1", true) });
+    state = sessionReducer(state, { type: "SET_UPDATED", set: makeSet("set-2", true) });
+    expect(state.phase).toBe("exerciseDone");
+    state = sessionReducer(state, { type: "SET_UPDATED", set: makeSet("set-2") });
+    expect(state.phase).toBe("exercising");
+    expect(state.currentSetIndex).toBe(1);
+  });
+
+  it("SET_UPDATED não interrompe um descanso em andamento", () => {
+    let state = startedState();
+    state = sessionReducer(state, {
+      type: "COMPLETE_SET",
+      set: makeSet("set-1", true),
+      restMs: 60000,
+      now: 1_000,
+    });
+    expect(state.phase).toBe("resting");
+    state = sessionReducer(state, { type: "SET_UPDATED", set: makeSet("set-2", true) });
+    expect(state.phase).toBe("resting");
+    expect(state.restEndsAt).toBe(61_000);
+  });
+
+  it("SET_UPDATED em outro exercício não muda a fase do atual", () => {
+    let state = startedState();
+    state = sessionReducer(state, { type: "SET_UPDATED", set: makeSet("set-3", true) });
+    expect(state.phase).toBe("exercising");
+    expect(state.currentExerciseIndex).toBe(0);
   });
 });

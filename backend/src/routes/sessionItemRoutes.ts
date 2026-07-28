@@ -1,12 +1,15 @@
 import { Router } from "express";
+import { requireUuid } from "../middleware/requireUuid.js";
 import { removeExercise, addSet, updateSet, removeSet } from "../controllers/sessionController.js";
 
+const withId = requireUuid("id");
+
 const exerciseRouter = Router();
-exerciseRouter.delete("/:id", removeExercise);
-exerciseRouter.post("/:id/sets", addSet);
+exerciseRouter.delete("/:id", withId, removeExercise);
+exerciseRouter.post("/:id/sets", withId, addSet);
 
 const setRouter = Router();
-setRouter.put("/:id", updateSet);
-setRouter.delete("/:id", removeSet);
+setRouter.put("/:id", withId, updateSet);
+setRouter.delete("/:id", withId, removeSet);
 
 export { exerciseRouter as sessionExerciseRoutes, setRouter as sessionSetRoutes };

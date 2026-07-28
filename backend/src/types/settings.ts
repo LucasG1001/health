@@ -8,7 +8,6 @@ export interface SettingsRow {
   sound_enabled: boolean;
   vibration_enabled: boolean;
   wake_lock_enabled: boolean;
-  rest_warmup_seconds: number;
   rest_working_seconds: number;
   created_at: Date;
   updated_at: Date;
@@ -21,7 +20,6 @@ export interface Settings {
   soundEnabled: boolean;
   vibrationEnabled: boolean;
   wakeLockEnabled: boolean;
-  restWarmupSeconds: number;
   restWorkingSeconds: number;
   updatedAt: Date;
 }
@@ -33,6 +31,5 @@ export interface SettingsPatch {
   soundEnabled?: boolean;
   vibrationEnabled?: boolean;
   wakeLockEnabled?: boolean;
-  restWarmupSeconds?: number;
   restWorkingSeconds?: number;
 }

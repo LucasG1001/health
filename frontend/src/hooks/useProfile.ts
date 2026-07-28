@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { fetchProfile, updateProfile } from "../services/profileService";
+import { apiErrorMessage } from "../utils/apiError";
 import type { Profile, ProfileInput } from "../types/profile";
 
 export function useProfile() {
@@ -14,8 +15,8 @@ export function useProfile() {
       .then((data) => {
         if (active) setProfile(data);
       })
-      .catch(() => {
-        if (active) setError("Não foi possível carregar o perfil.");
+      .catch((err) => {
+        if (active) setError(apiErrorMessage(err, "Não foi possível carregar o perfil."));
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -27,6 +28,7 @@ export function useProfile() {
 
   const reload = useCallback(() => {
     setError(null);
+    setLoading(true);
     setRefreshKey((k) => k + 1);
   }, []);
 

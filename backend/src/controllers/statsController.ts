@@ -18,6 +18,7 @@ export const body = asyncHandler("Erro ao buscar a evolução corporal.", async 
         birthDate: profile?.birth_date ?? null,
         biologicalSex: (profile?.biological_sex as BiologicalSex | null) ?? null,
         activityLevel: (profile?.activity_level as ActivityLevel | null) ?? null,
+        onIso: row.measured_on,
       });
       return {
         date: row.measured_on,

@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { EmptyState } from "../../components/EmptyState/EmptyState";
 import { ConfirmDialog } from "../../components/ConfirmDialog/ConfirmDialog";
 import { CameraIcon, CompareIcon, PlusIcon, TrashIcon } from "../../components/Icon/icons";
 import { usePhotos } from "../../hooks/usePhotos";
+import { useConfirmDelete } from "../../hooks/useConfirmDelete";
 import { POSE_LABELS, formatDate } from "../../utils/format";
 import type { ProgressPhoto } from "../../types/photo";
 import styles from "./PhotosPage.module.css";
@@ -12,7 +13,7 @@ import styles from "./PhotosPage.module.css";
 export function PhotosPage() {
   const navigate = useNavigate();
   const { photos, loading, error, reload, remove } = usePhotos();
-  const [deleting, setDeleting] = useState<string | null>(null);
+  const deletion = useConfirmDelete(remove);
 
   const groups = useMemo(() => {
     const byDate = new Map<string, ProgressPhoto[]>();
@@ -78,7 +79,7 @@ export function PhotosPage() {
                     <button
                       type="button"
                       className={styles.deleteButton}
-                      onClick={() => setDeleting(photo.id)}
+                      onClick={() => deletion.request(photo.id)}
                       aria-label="Excluir foto"
                     >
                       <TrashIcon className={styles.deleteIcon} />
@@ -91,17 +92,15 @@ export function PhotosPage() {
         ))}
       </div>
 
-      {deleting && (
+      {deletion.pendingId && (
         <ConfirmDialog
           title="Excluir foto"
           message="A foto será removida permanentemente."
           confirmLabel="Excluir"
           danger
-          onCancel={() => setDeleting(null)}
-          onConfirm={async () => {
-            await remove(deleting);
-            setDeleting(null);
-          }}
+          busy={deletion.removing}
+          onCancel={deletion.cancel}
+          onConfirm={deletion.confirm}
         />
       )}
 

@@ -6,6 +6,7 @@ import { ConfirmDialog } from "../../components/ConfirmDialog/ConfirmDialog";
 import { GoalProgressBar } from "../../components/GoalProgressBar/GoalProgressBar";
 import { PlusIcon, TargetIcon, TrashIcon } from "../../components/Icon/icons";
 import { useGoals } from "../../hooks/useGoals";
+import { useConfirmDelete } from "../../hooks/useConfirmDelete";
 import { formatDate, formatKg, formatPct } from "../../utils/format";
 import type { Goal } from "../../types/goal";
 import styles from "./GoalsPage.module.css";
@@ -19,7 +20,18 @@ const STATUS_LABELS: Record<Goal["status"], string> = {
 export function GoalsPage() {
   const navigate = useNavigate();
   const { goals, activeGoal, loading, error, reload, setStatus, remove } = useGoals();
-  const [deleting, setDeleting] = useState<string | null>(null);
+  const deletion = useConfirmDelete(remove);
+  const [statusBusy, setStatusBusy] = useState(false);
+
+  const changeStatus = async (status: Goal["status"]) => {
+    if (!activeGoal || statusBusy) return;
+    setStatusBusy(true);
+    try {
+      await setStatus(activeGoal.id, status);
+    } finally {
+      setStatusBusy(false);
+    }
+  };
 
   return (
     <div className={styles.page}>
@@ -56,10 +68,20 @@ export function GoalsPage() {
         <section className={styles.activeSection}>
           <GoalProgressBar goal={activeGoal} />
           <div className={styles.activeActions}>
-            <button type="button" className={styles.successButton} onClick={() => setStatus(activeGoal.id, "achieved")}>
+            <button
+              type="button"
+              className={styles.successButton}
+              onClick={() => changeStatus("achieved")}
+              disabled={statusBusy}
+            >
               Marcar como alcançada
             </button>
-            <button type="button" className={styles.ghostButton} onClick={() => setStatus(activeGoal.id, "abandoned")}>
+            <button
+              type="button"
+              className={styles.ghostButton}
+              onClick={() => changeStatus("abandoned")}
+              disabled={statusBusy}
+            >
               Abandonar
             </button>
           </div>
@@ -88,7 +110,7 @@ export function GoalsPage() {
                   <button
                     type="button"
                     className={styles.deleteButton}
-                    onClick={() => setDeleting(goal.id)}
+                    onClick={() => deletion.request(goal.id)}
                     aria-label="Excluir meta"
                   >
                     <TrashIcon className={styles.deleteIcon} />
@@ -99,17 +121,15 @@ export function GoalsPage() {
         </section>
       )}
 
-      {deleting && (
+      {deletion.pendingId && (
         <ConfirmDialog
           title="Excluir meta"
           message="Esta meta será removida permanentemente."
           confirmLabel="Excluir"
           danger
-          onCancel={() => setDeleting(null)}
-          onConfirm={async () => {
-            await remove(deleting);
-            setDeleting(null);
-          }}
+          busy={deletion.removing}
+          onCancel={deletion.cancel}
+          onConfirm={deletion.confirm}
         />
       )}
 

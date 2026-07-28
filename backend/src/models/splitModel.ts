@@ -1,4 +1,4 @@
-import { pool } from "../database/connection.js";
+import { pool, rollback } from "../database/connection.js";
 import { buildUpdateSet } from "../lib/sqlUpdate.js";
 import { resolveImageUrl } from "./exerciseModel.js";
 import type {
@@ -145,7 +145,7 @@ export async function reorder(orderedIds: string[]): Promise<Split[]> {
     }
     await client.query("COMMIT");
   } catch (error) {
-    await client.query("ROLLBACK");
+    await rollback(client);
     throw error;
   } finally {
     client.release();
@@ -173,17 +173,11 @@ export async function replaceExercises(
     for (let i = 0; i < exercises.length; i++) {
       const exercise = exercises[i]!;
       const inserted = await client.query<{ id: string }>(
-        `INSERT INTO split_exercises (split_id, exercise_id, position, working_weight_kg, rest_seconds, notes)
-         VALUES ($1, $2, $3, $4, $5, $6)
+        // A carga vive só no catálogo (exercises.working_weight_kg), que é a única lida.
+        `INSERT INTO split_exercises (split_id, exercise_id, position, rest_seconds, notes)
+         VALUES ($1, $2, $3, $4, $5)
          RETURNING id`,
-        [
-          splitId,
-          exercise.exerciseId,
-          i,
-          exercise.workingWeightKg ?? null,
-          exercise.restSeconds ?? null,
-          exercise.notes ?? null,
-        ]
+        [splitId, exercise.exerciseId, i, exercise.restSeconds ?? null, exercise.notes ?? null]
       );
       const splitExerciseId = inserted.rows[0]!.id;
 
@@ -201,7 +195,7 @@ export async function replaceExercises(
     await client.query("UPDATE workout_splits SET updated_at = NOW() WHERE id = $1", [splitId]);
     await client.query("COMMIT");
   } catch (error) {
-    await client.query("ROLLBACK");
+    await rollback(client);
     throw error;
   } finally {
     client.release();
@@ -224,11 +218,14 @@ export async function updateExercisePlan(
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    await client.query("UPDATE split_exercises SET working_weight_kg = $2, rest_seconds = $3 WHERE id = $1", [
-      splitExerciseId,
-      input.workingWeightKg ?? null,
-      input.restSeconds ?? null,
-    ]);
+    // Só grava o que veio no corpo: com `?? null` um PUT sem restSeconds apagava o
+    // descanso configurado do exercício.
+    if (input.restSeconds !== undefined) {
+      await client.query("UPDATE split_exercises SET rest_seconds = $2 WHERE id = $1", [
+        splitExerciseId,
+        input.restSeconds,
+      ]);
+    }
     await client.query("DELETE FROM planned_sets WHERE split_exercise_id = $1", [splitExerciseId]);
     for (let position = 0; position < input.series; position++) {
       await client.query(
@@ -240,7 +237,7 @@ export async function updateExercisePlan(
     await client.query("UPDATE workout_splits SET updated_at = NOW() WHERE id = $1", [splitId]);
     await client.query("COMMIT");
   } catch (error) {
-    await client.query("ROLLBACK");
+    await rollback(client);
     throw error;
   } finally {
     client.release();
@@ -249,9 +246,3 @@ export async function updateExercisePlan(
   return findById(splitId);
 }
 
-export async function scheduledWeekdays(): Promise<number[]> {
-  const result = await pool.query<{ weekday: number }>(
-    "SELECT DISTINCT UNNEST(weekdays) AS weekday FROM workout_splits"
-  );
-  return result.rows.map((row) => row.weekday);
-}

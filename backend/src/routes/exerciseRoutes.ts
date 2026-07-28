@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { createUploader } from "../lib/upload.js";
+import { requireUuid } from "../middleware/requireUuid.js";
 import {
   getAll,
   getById,
@@ -14,15 +15,16 @@ import {
 
 const router = Router();
 const uploader = createUploader("exercises", { allowGif: true });
+const withId = requireUuid("id");
 
 router.get("/", getAll);
 router.post("/", create);
-router.get("/:id", getById);
-router.put("/:id", update);
-router.delete("/:id", remove);
-router.post("/:id/image", uploader.single("file"), uploadImage);
-router.delete("/:id/image", removeImage);
-router.get("/:id/last-performance", getLastPerformance);
-router.get("/:id/history", getHistory);
+router.get("/:id", withId, getById);
+router.put("/:id", withId, update);
+router.delete("/:id", withId, remove);
+router.post("/:id/image", withId, uploader.single("file"), uploadImage);
+router.delete("/:id/image", withId, removeImage);
+router.get("/:id/last-performance", withId, getLastPerformance);
+router.get("/:id/history", withId, getHistory);
 
 export { router as exerciseRoutes };

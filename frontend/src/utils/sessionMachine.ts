@@ -9,7 +9,6 @@ export interface SessionState {
   currentSetIndex: number;
   restEndsAt: number | null;
   restTotalMs: number | null;
-  prepareCued: boolean;
 }
 
 export interface SessionSnapshot {
@@ -19,7 +18,6 @@ export interface SessionSnapshot {
   currentSetIndex: number;
   restEndsAt: number | null;
   restTotalMs: number | null;
-  prepareCued: boolean;
 }
 
 export type SessionAction =
@@ -30,7 +28,6 @@ export type SessionAction =
   | { type: "REST_ENDED" }
   | { type: "SKIP_REST" }
   | { type: "EXTEND_REST"; ms: number }
-  | { type: "PREPARE_CUED" }
   | { type: "NEXT_EXERCISE" }
   | { type: "BACK_TO_OVERVIEW" }
   | { type: "SET_UPDATED"; set: SessionSet }
@@ -49,7 +46,6 @@ export const initialSessionState: SessionState = {
   currentSetIndex: 0,
   restEndsAt: null,
   restTotalMs: null,
-  prepareCued: false,
 };
 
 export function firstPendingSetIndex(exercise: SessionExercise): number {
@@ -79,11 +75,12 @@ export function currentSet(state: SessionState): SessionSet | null {
   return currentExercise(state)?.sets[state.currentSetIndex] ?? null;
 }
 
+export function completedSetsOf(exercise: SessionExercise): number {
+  return exercise.sets.filter((set) => set.completedAt !== null).length;
+}
+
 export function completedSetsCount(session: WorkoutSession): number {
-  return session.exercises.reduce(
-    (total, exercise) => total + exercise.sets.filter((set) => set.completedAt !== null).length,
-    0
-  );
+  return session.exercises.reduce((total, exercise) => total + completedSetsOf(exercise), 0);
 }
 
 export function totalSetsCount(session: WorkoutSession): number {
@@ -103,6 +100,20 @@ export function sessionVolumeKg(session: WorkoutSession): number {
   );
 }
 
+// Mantém a fase coerente com os dados quando séries do exercício atual são concluídas,
+// reabertas, adicionadas ou removidas fora do fluxo Play → Feito.
+function withSession(state: SessionState, session: WorkoutSession): SessionState {
+  const exercise = session.exercises[state.currentExerciseIndex];
+  if (!exercise) return { ...state, session };
+  if (state.phase === "exercising" && !hasPendingSets(exercise)) {
+    return { ...state, session, phase: "exerciseDone", restEndsAt: null, restTotalMs: null };
+  }
+  if (state.phase === "exerciseDone" && hasPendingSets(exercise)) {
+    return { ...state, session, phase: "exercising", currentSetIndex: firstPendingSetIndex(exercise) };
+  }
+  return { ...state, session };
+}
+
 function replaceSet(session: WorkoutSession, updated: SessionSet): WorkoutSession {
   return {
     ...session,
@@ -118,15 +129,15 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
     case "HYDRATE": {
       const { session, snapshot } = action;
       if (snapshot && snapshot.sessionId === session.id) {
-        const exerciseIndex = Math.min(snapshot.currentExerciseIndex, session.exercises.length - 1);
+        const exerciseIndex = Math.max(0, Math.min(snapshot.currentExerciseIndex, session.exercises.length - 1));
+        const setCount = session.exercises[exerciseIndex]?.sets.length ?? 0;
         return {
           session,
           phase: snapshot.phase === "idle" ? "overview" : snapshot.phase,
-          currentExerciseIndex: Math.max(0, exerciseIndex),
-          currentSetIndex: snapshot.currentSetIndex,
+          currentExerciseIndex: exerciseIndex,
+          currentSetIndex: Math.max(0, Math.min(snapshot.currentSetIndex, setCount - 1)),
           restEndsAt: snapshot.restEndsAt,
           restTotalMs: snapshot.restTotalMs,
-          prepareCued: snapshot.prepareCued,
         };
       }
       return { ...initialSessionState, session, phase: "overview" };
@@ -146,7 +157,6 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
         currentSetIndex: firstPendingSetIndex(exercise),
         restEndsAt: null,
         restTotalMs: null,
-        prepareCued: false,
       };
     }
 
@@ -164,7 +174,6 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
             phase: "interRest",
             restEndsAt: action.now + action.interRestMs,
             restTotalMs: action.interRestMs,
-            prepareCued: false,
           };
         }
         return {
@@ -173,7 +182,6 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
           phase: "exerciseDone",
           restEndsAt: null,
           restTotalMs: null,
-          prepareCued: false,
         };
       }
       return {
@@ -182,7 +190,6 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
         phase: "resting",
         restEndsAt: action.now + action.restMs,
         restTotalMs: action.restMs,
-        prepareCued: false,
       };
     }
 
@@ -191,7 +198,7 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
       if (!state.session) return state;
       const exercise = state.session.exercises[state.currentExerciseIndex];
       if (!exercise || !hasPendingSets(exercise)) {
-        return { ...state, phase: "exerciseDone", restEndsAt: null, restTotalMs: null, prepareCued: false };
+        return { ...state, phase: "exerciseDone", restEndsAt: null, restTotalMs: null };
       }
       return {
         ...state,
@@ -199,7 +206,6 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
         currentSetIndex: firstPendingSetIndex(exercise),
         restEndsAt: null,
         restTotalMs: null,
-        prepareCued: false,
       };
     }
 
@@ -209,18 +215,14 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
         ...state,
         restEndsAt: state.restEndsAt + action.ms,
         restTotalMs: (state.restTotalMs ?? 0) + action.ms,
-        prepareCued: false,
       };
     }
-
-    case "PREPARE_CUED":
-      return { ...state, prepareCued: true };
 
     case "NEXT_EXERCISE": {
       if (!state.session) return state;
       const next = nextExerciseIndex(state.session, state.currentExerciseIndex);
       if (next === null) {
-        return { ...state, phase: "overview", restEndsAt: null, restTotalMs: null, prepareCued: false };
+        return { ...state, phase: "overview", restEndsAt: null, restTotalMs: null };
       }
       const exercise = state.session.exercises[next]!;
       return {
@@ -230,39 +232,27 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
         currentSetIndex: firstPendingSetIndex(exercise),
         restEndsAt: null,
         restTotalMs: null,
-        prepareCued: false,
       };
     }
 
     case "BACK_TO_OVERVIEW":
-      return { ...state, phase: "overview", restEndsAt: null, restTotalMs: null, prepareCued: false };
+      return { ...state, phase: "overview", restEndsAt: null, restTotalMs: null };
 
     case "SET_UPDATED": {
       if (!state.session) return state;
-      return { ...state, session: replaceSet(state.session, action.set) };
+      return withSession(state, replaceSet(state.session, action.set));
     }
 
     case "SET_ADDED": {
       if (!state.session) return state;
-      const session = {
+      return withSession(state, {
         ...state.session,
         exercises: state.session.exercises.map((exercise) =>
           exercise.id === action.exerciseId
             ? { ...exercise, sets: [...exercise.sets, action.set] }
             : exercise
         ),
-      };
-      const exerciseIndex = session.exercises.findIndex((exercise) => exercise.id === action.exerciseId);
-      if (exerciseIndex === state.currentExerciseIndex && state.phase === "exerciseDone") {
-        const exercise = session.exercises[exerciseIndex]!;
-        return {
-          ...state,
-          session,
-          phase: "exercising",
-          currentSetIndex: firstPendingSetIndex(exercise),
-        };
-      }
-      return { ...state, session };
+      });
     }
 
     case "SET_REMOVED": {
@@ -278,7 +268,7 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
       const currentSetIndex = exercise
         ? Math.min(state.currentSetIndex, Math.max(0, exercise.sets.length - 1))
         : 0;
-      return { ...state, session, currentSetIndex };
+      return withSession({ ...state, currentSetIndex }, session);
     }
 
     case "EXERCISE_ADDED": {
@@ -300,7 +290,6 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
         currentSetIndex: 0,
         restEndsAt: null,
         restTotalMs: null,
-        prepareCued: false,
       };
     }
 
@@ -341,6 +330,5 @@ export function toSnapshot(state: SessionState): SessionSnapshot | null {
     currentSetIndex: state.currentSetIndex,
     restEndsAt: state.restEndsAt,
     restTotalMs: state.restTotalMs,
-    prepareCued: state.prepareCued,
   };
 }

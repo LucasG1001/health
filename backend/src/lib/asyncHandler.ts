@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { DomainError } from "../models/errors.js";
+import { toDomainError } from "./pgError.js";
 
 type AsyncRoute = (req: Request, res: Response) => Promise<void>;
 
@@ -8,11 +9,15 @@ export function asyncHandler(errorMessage: string, handler: AsyncRoute): AsyncRo
     try {
       await handler(req, res);
     } catch (error) {
-      if (error instanceof DomainError) {
-        res.status(error.status).json({ error: error.message });
+      const domain = error instanceof DomainError ? error : toDomainError(error);
+      if (domain) {
+        if (!res.headersSent) res.status(domain.status).json({ error: domain.message });
         return;
       }
-      res.status(500).json({ error: errorMessage });
+      // Todo controller passa por aqui, então sem este log nenhum erro inesperado
+      // (SQL, FK, TypeError) aparece em produção.
+      console.error(`${req.method} ${req.originalUrl} falhou:`, error);
+      if (!res.headersSent) res.status(500).json({ error: errorMessage });
     }
   };
 }

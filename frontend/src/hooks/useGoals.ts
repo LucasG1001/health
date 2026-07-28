@@ -1,44 +1,31 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
 import { deleteGoal, fetchGoals, updateGoal } from "../services/goalService";
+import { apiErrorMessage } from "../utils/apiError";
+import { useResource } from "./useResource";
 import type { Goal, GoalStatus } from "../types/goal";
 
 export function useGoals() {
-  const [goals, setGoals] = useState<Goal[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [refreshKey, setRefreshKey] = useState(0);
+  const { data: goals, setData, loading, error, setError, reload, remove } = useResource<Goal>(
+    fetchGoals,
+    "Não foi possível carregar as metas.",
+    deleteGoal,
+    "Não foi possível excluir a meta."
+  );
 
-  useEffect(() => {
-    let active = true;
-    fetchGoals()
-      .then((data) => {
-        if (active) setGoals(data);
-      })
-      .catch(() => {
-        if (active) setError("Não foi possível carregar as metas.");
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [refreshKey]);
-
-  const reload = useCallback(() => {
-    setError(null);
-    setRefreshKey((k) => k + 1);
-  }, []);
-
-  const setStatus = useCallback(async (id: string, status: GoalStatus) => {
-    const updated = await updateGoal(id, { status });
-    setGoals((prev) => prev.map((goal) => (goal.id === id ? updated : goal)));
-  }, []);
-
-  const remove = useCallback(async (id: string) => {
-    await deleteGoal(id);
-    setGoals((prev) => prev.filter((goal) => goal.id !== id));
-  }, []);
+  const setStatus = useCallback(
+    async (id: string, status: GoalStatus): Promise<boolean> => {
+      setError(null);
+      try {
+        const updated = await updateGoal(id, { status });
+        setData((prev) => prev.map((goal) => (goal.id === id ? updated : goal)));
+        return true;
+      } catch (err) {
+        setError(apiErrorMessage(err, "Não foi possível atualizar a meta."));
+        return false;
+      }
+    },
+    [setData, setError]
+  );
 
   const activeGoal = goals.find((goal) => goal.status === "active") ?? null;
 

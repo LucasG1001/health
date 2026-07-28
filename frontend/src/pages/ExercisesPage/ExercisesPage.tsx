@@ -3,14 +3,17 @@ import { useNavigate } from "react-router-dom";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { EmptyState } from "../../components/EmptyState/EmptyState";
 import { DumbbellIcon, PlusIcon } from "../../components/Icon/icons";
+import { ErrorBanner } from "../../components/ErrorBanner/ErrorBanner";
+import { Loading } from "../../components/Loading/Loading";
+import { ExerciseThumb } from "../../components/ExerciseThumb/ExerciseThumb";
 import { useExercises } from "../../hooks/useExercises";
-import { MUSCLE_GROUP_LABELS, imageFocalStyle } from "../../utils/format";
+import { MUSCLE_GROUP_LABELS } from "../../utils/format";
 import type { MuscleGroup } from "../../types/exercise";
 import styles from "./ExercisesPage.module.css";
 
 export function ExercisesPage() {
   const navigate = useNavigate();
-  const { exercises, loading, error } = useExercises();
+  const { exercises, loading, error, reload } = useExercises();
   const [query, setQuery] = useState("");
   const [group, setGroup] = useState<MuscleGroup | "all">("all");
 
@@ -45,7 +48,8 @@ export function ExercisesPage() {
         }
       />
 
-      {error && <div className={styles.error}>{error}</div>}
+      {error && <ErrorBanner message={error} onRetry={reload} />}
+      {loading && <Loading />}
 
       <input
         type="search"
@@ -90,6 +94,10 @@ export function ExercisesPage() {
         />
       )}
 
+      {!loading && exercises.length > 0 && filtered.length === 0 && (
+        <p className={styles.noResults}>Nenhum exercício corresponde à busca.</p>
+      )}
+
       <div className={styles.list}>
         {filtered.map((exercise) => (
           <button
@@ -98,13 +106,7 @@ export function ExercisesPage() {
             className={styles.card}
             onClick={() => navigate(`/treino/exercicios/${exercise.id}/editar`)}
           >
-            <div className={styles.thumb}>
-              {exercise.imageUrl ? (
-                <img src={exercise.imageUrl} alt="" loading="lazy" style={imageFocalStyle(exercise)} />
-              ) : (
-                <DumbbellIcon className={styles.thumbIcon} />
-              )}
-            </div>
+            <ExerciseThumb exercise={exercise} />
             <div className={styles.cardInfo}>
               <span className={styles.cardName}>{exercise.name}</span>
               <span className={styles.cardMeta}>

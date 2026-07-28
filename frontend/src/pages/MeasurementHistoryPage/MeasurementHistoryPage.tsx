@@ -1,17 +1,17 @@
-import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { EmptyState } from "../../components/EmptyState/EmptyState";
 import { ConfirmDialog } from "../../components/ConfirmDialog/ConfirmDialog";
 import { PencilIcon, RulerIcon, TrashIcon } from "../../components/Icon/icons";
 import { useMeasurements } from "../../hooks/useMeasurements";
+import { useConfirmDelete } from "../../hooks/useConfirmDelete";
 import { formatCm, formatDate, formatKg, formatNumber, formatPct } from "../../utils/format";
 import styles from "./MeasurementHistoryPage.module.css";
 
 export function MeasurementHistoryPage() {
   const navigate = useNavigate();
   const { measurements, loading, error, remove } = useMeasurements();
-  const [deleting, setDeleting] = useState<string | null>(null);
+  const deletion = useConfirmDelete(remove);
 
   const ordered = [...measurements].reverse();
 
@@ -43,7 +43,7 @@ export function MeasurementHistoryPage() {
                 <button
                   type="button"
                   className={`${styles.actionButton} ${styles.dangerButton}`}
-                  onClick={() => setDeleting(measurement.id)}
+                  onClick={() => deletion.request(measurement.id)}
                   aria-label="Excluir"
                 >
                   <TrashIcon className={styles.actionIcon} />
@@ -67,17 +67,15 @@ export function MeasurementHistoryPage() {
         ))}
       </div>
 
-      {deleting && (
+      {deletion.pendingId && (
         <ConfirmDialog
           title="Excluir medição"
           message="Esta medição será removida permanentemente."
           confirmLabel="Excluir"
           danger
-          onCancel={() => setDeleting(null)}
-          onConfirm={async () => {
-            await remove(deleting);
-            setDeleting(null);
-          }}
+          busy={deletion.removing}
+          onCancel={deletion.cancel}
+          onConfirm={deletion.confirm}
         />
       )}
     </div>

@@ -1,23 +1,28 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 
 export function useWakeLock(active: boolean): void {
-  const sentinelRef = useRef<WakeLockSentinel | null>(null);
-
   useEffect(() => {
     if (!active || !("wakeLock" in navigator)) return;
 
     let cancelled = false;
+    let requesting = false;
+    let sentinel: WakeLockSentinel | null = null;
 
     const request = async () => {
+      if (cancelled || requesting) return;
+      if (sentinel && !sentinel.released) return;
+      requesting = true;
       try {
-        const sentinel = await navigator.wakeLock.request("screen");
+        const next = await navigator.wakeLock.request("screen");
         if (cancelled) {
-          sentinel.release().catch(() => undefined);
+          next.release().catch(() => undefined);
           return;
         }
-        sentinelRef.current = sentinel;
+        sentinel = next;
       } catch {
-        sentinelRef.current = null;
+        sentinel = null;
+      } finally {
+        requesting = false;
       }
     };
 
@@ -31,8 +36,8 @@ export function useWakeLock(active: boolean): void {
     return () => {
       cancelled = true;
       document.removeEventListener("visibilitychange", onVisible);
-      sentinelRef.current?.release().catch(() => undefined);
-      sentinelRef.current = null;
+      sentinel?.release().catch(() => undefined);
+      sentinel = null;
     };
   }, [active]);
 }

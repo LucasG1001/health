@@ -38,12 +38,8 @@ export interface PlannedSetRow {
   id: string;
   split_exercise_id: string;
   position: number;
-  set_type: SetType;
-  variation: SetVariation;
   target_reps_min: number;
   target_reps_max: number | null;
-  suggested_weight_kg: number | null;
-  rest_seconds: number | null;
 }
 
 export interface PlannedSet {
@@ -86,7 +82,6 @@ export interface Split {
 export interface SplitExerciseInput {
   exerciseId: string;
   notes?: string | null;
-  workingWeightKg?: number | null;
   restSeconds?: number | null;
   plannedSets: {
     targetRepsMin: number;
@@ -98,6 +93,5 @@ export interface UpdateExercisePlanInput {
   series: number;
   targetRepsMin: number;
   targetRepsMax?: number | null;
-  workingWeightKg?: number | null;
   restSeconds?: number | null;
 }

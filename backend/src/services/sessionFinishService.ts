@@ -1,4 +1,4 @@
-import { pool } from "../database/connection.js";
+import { pool, rollback } from "../database/connection.js";
 import { SessionAlreadyFinishedError } from "../models/errors.js";
 import type { FinishSummary, SessionRow } from "../types/session.js";
 
@@ -13,7 +13,7 @@ export async function finishSession(sessionId: string): Promise<FinishSummary | 
     );
     const session = sessionResult.rows[0];
     if (!session) {
-      await client.query("ROLLBACK");
+      await rollback(client);
       return null;
     }
     if (session.status === "completed") {
@@ -55,7 +55,7 @@ export async function finishSession(sessionId: string): Promise<FinishSummary | 
       plannedSets: planned_sets,
     };
   } catch (error) {
-    await client.query("ROLLBACK");
+    await rollback(client);
     throw error;
   } finally {
     client.release();

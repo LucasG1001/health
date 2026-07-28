@@ -7,17 +7,6 @@
   gap: var(--spacing-lg);
 }
 
-.error {
-  padding: var(--spacing-md) var(--spacing-base);
-  border-radius: var(--radius-md);
-  background: var(--color-error-subtle);
-  color: var(--color-error);
-}
-
-.loading {
-  color: var(--color-text-tertiary);
-}
-
 .chartSection {
   display: flex;
   flex-direction: column;
@@ -41,28 +30,6 @@
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--color-text-secondary);
-}
-
-.groupToggle {
-  display: flex;
-  gap: 2px;
-  padding: 2px;
-  border-radius: var(--radius-md);
-  background: var(--color-bg-tertiary);
-}
-
-.groupOption {
-  padding: 4px 12px;
-  border-radius: var(--radius-sm);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-secondary);
-  transition: background var(--transition-fast), color var(--transition-fast);
-}
-
-.groupActive {
-  background: var(--color-accent);
-  color: #fff;
 }
 
 .list {

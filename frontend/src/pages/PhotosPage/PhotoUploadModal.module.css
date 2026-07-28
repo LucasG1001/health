@@ -37,30 +37,6 @@
   object-fit: contain;
 }
 
-.poseRow {
-  display: flex;
-  gap: var(--spacing-sm);
-}
-
-.poseChip {
-  flex: 1;
-  min-height: 42px;
-  border-radius: var(--radius-md);
-  background: var(--color-bg-tertiary);
-  border: 1px solid var(--color-border);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-medium);
-  transition: color var(--transition-fast), background var(--transition-fast), border-color var(--transition-fast);
-}
-
-.poseActive,
-.poseActive:hover {
-  background: var(--color-accent-subtle);
-  border-color: var(--color-accent);
-  color: var(--color-accent);
-}
-
 .field {
   display: flex;
   flex-direction: column;

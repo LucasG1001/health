@@ -12,6 +12,7 @@ import styles from "./MeasurementFormModal.module.css";
 interface OutletContextValue {
   reload: () => void;
   measurements: Measurement[];
+  loading: boolean;
 }
 
 interface NumericField {
@@ -33,9 +34,40 @@ const FIELDS: NumericField[] = [
 export function MeasurementFormModal() {
   const navigate = useNavigate();
   const { id } = useParams();
-  const { reload, measurements } = useOutletContext<OutletContextValue>();
-  const editing = id ? measurements.find((m) => m.id === id) : undefined;
+  const { reload, measurements, loading } = useOutletContext<OutletContextValue>();
+  const close = () => navigate("/medidas");
 
+  // Em reload direto de /medidas/m/:id a lista do pai ainda está vazia. Sem esperar por
+  // ela o formulário abria em branco e o submit criava uma medição nova em vez de editar.
+  if (id) {
+    const editing = measurements.find((measurement) => measurement.id === id);
+    if (loading) {
+      return (
+        <Modal title="Editar medição" onClose={close}>
+          <p className={styles.loading}>Carregando…</p>
+        </Modal>
+      );
+    }
+    if (!editing) {
+      return (
+        <Modal title="Editar medição" onClose={close}>
+          <p className={styles.error}>Medição não encontrada.</p>
+        </Modal>
+      );
+    }
+    return <MeasurementForm editing={editing} reload={reload} close={close} />;
+  }
+
+  return <MeasurementForm editing={null} reload={reload} close={close} />;
+}
+
+interface MeasurementFormProps {
+  editing: Measurement | null;
+  reload: () => void;
+  close: () => void;
+}
+
+function MeasurementForm({ editing, reload, close }: MeasurementFormProps) {
   const [measuredOn, setMeasuredOn] = useState(editing?.measuredOn ?? todayIso());
   const [values, setValues] = useState<Record<NumericField["key"], string>>(() => {
     const initial = {} as Record<NumericField["key"], string>;
@@ -48,11 +80,7 @@ export function MeasurementFormModal() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const close = () => navigate("/medidas");
-
   const handleSubmit = async () => {
-    setSaving(true);
-    setError(null);
     const payload = {
       measuredOn,
       weightKg: parseMaskedNumber(values.weightKg),
@@ -64,6 +92,12 @@ export function MeasurementFormModal() {
       chestCm: parseMaskedNumber(values.chestCm),
       notes: notes.trim() || null,
     };
+    if (FIELDS.every((field) => payload[field.key] == null) && payload.notes === null) {
+      setError("Preencha pelo menos uma medida.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
     try {
       if (editing) {
         await updateMeasurement(editing.id, payload);

@@ -14,6 +14,7 @@ function toMeasurement(row: MeasurementRow, profile: ProfileRow | null): Measure
     birthDate: profile?.birth_date ?? null,
     biologicalSex: (profile?.biological_sex as BiologicalSex | null) ?? null,
     activityLevel: (profile?.activity_level as ActivityLevel | null) ?? null,
+    onIso: row.measured_on,
   });
 
   return {

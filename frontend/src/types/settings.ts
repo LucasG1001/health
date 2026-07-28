@@ -7,7 +7,6 @@ export interface Settings {
   soundEnabled: boolean;
   vibrationEnabled: boolean;
   wakeLockEnabled: boolean;
-  restWarmupSeconds: number;
   restWorkingSeconds: number;
   updatedAt: string;
 }
@@ -19,6 +18,5 @@ export interface SettingsInput {
   soundEnabled?: boolean;
   vibrationEnabled?: boolean;
   wakeLockEnabled?: boolean;
-  restWarmupSeconds?: number;
   restWorkingSeconds?: number;
 }
