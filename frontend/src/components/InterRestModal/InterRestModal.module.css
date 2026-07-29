@@ -56,10 +56,25 @@
   transition: width var(--transition-fast) linear;
 }
 
+/* auto-fit para os três campos (carga, adicional, reps) quebrarem em duas linhas em
+   telas estreitas em vez de ficarem apertados demais para digitar. */
 .loadRow {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(88px, 1fr));
   gap: var(--spacing-sm);
+}
+
+.loadRow input {
+  width: 100%;
+  min-width: 0;
+  text-align: center;
+}
+
+.editLabel {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  text-align: center;
 }
 
 .field {

@@ -239,6 +239,8 @@ async function syncActiveSession(
     values
   );
 
+  if (input.series === undefined) return;
+
   const counts = await client.query<{ total: number; done: number }>(
     `SELECT COUNT(*)::int AS total,
             COUNT(*) FILTER (WHERE completed_at IS NOT NULL)::int AS done
@@ -309,13 +311,22 @@ export async function updateExercisePlan(
         input.restSeconds,
       ]);
     }
-    await client.query("DELETE FROM planned_sets WHERE split_exercise_id = $1", [splitExerciseId]);
-    for (let position = 0; position < input.series; position++) {
+    if (input.series === undefined) {
+      // Só os alvos: preserva as linhas (e os ids) das séries planejadas.
       await client.query(
-        `INSERT INTO planned_sets (split_exercise_id, position, target_reps_min, target_reps_max)
-         VALUES ($1, $2, $3, $4)`,
-        [splitExerciseId, position, input.targetRepsMin, input.targetRepsMax ?? null]
+        `UPDATE planned_sets SET target_reps_min = $2, target_reps_max = $3
+          WHERE split_exercise_id = $1`,
+        [splitExerciseId, input.targetRepsMin, input.targetRepsMax ?? null]
       );
+    } else {
+      await client.query("DELETE FROM planned_sets WHERE split_exercise_id = $1", [splitExerciseId]);
+      for (let position = 0; position < input.series; position++) {
+        await client.query(
+          `INSERT INTO planned_sets (split_exercise_id, position, target_reps_min, target_reps_max)
+           VALUES ($1, $2, $3, $4)`,
+          [splitExerciseId, position, input.targetRepsMin, input.targetRepsMax ?? null]
+        );
+      }
     }
     await client.query("UPDATE workout_splits SET updated_at = NOW() WHERE id = $1", [splitId]);
     await syncActiveSession(client, splitExercise.exercise_id, input);

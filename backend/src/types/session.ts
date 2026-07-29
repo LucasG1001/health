@@ -21,6 +21,8 @@ export interface SessionExerciseRow {
   id: string;
   session_id: string;
   exercise_id: string | null;
+  /** Resolvido pela divisão da sessão; null se o exercício saiu da divisão. */
+  split_exercise_id: string | null;
   exercise_name: string;
   position: number;
   notes: string | null;
@@ -67,6 +69,8 @@ export interface SessionSet {
 export interface SessionExercise {
   id: string;
   exerciseId: string | null;
+  /** Permite editar o plano (séries/reps) direto da tela de execução. */
+  splitExerciseId: string | null;
   exerciseName: string;
   muscleGroup: MuscleGroup | null;
   equipment: string | null;

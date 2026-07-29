@@ -22,8 +22,10 @@ export function InterRestModal() {
 
 function InterRestPanel({ exercise }: { exercise: SessionExercise }) {
   const { restRemainingMs, restProgress, extendRest, commitInterRest } = useWorkoutSession();
+  const currentReps = exercise.sets[0]?.targetRepsMin ?? null;
   const [working, setWorking] = useState(numberToMask(exercise.workingWeightKg));
   const [additional, setAdditional] = useState(numberToMask(exercise.additionalWeightKg));
+  const [reps, setReps] = useState(currentReps != null ? String(currentReps) : "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,9 +42,9 @@ function InterRestPanel({ exercise }: { exercise: SessionExercise }) {
     setSaving(true);
     setError(null);
     try {
-      await commitInterRest(working, additional);
+      await commitInterRest({ working, additional, reps });
     } catch (err) {
-      setError(apiErrorMessage(err, "Não foi possível salvar a carga."));
+      setError(apiErrorMessage(err, "Não foi possível salvar o exercício."));
       setSaving(false);
     }
   };
@@ -57,29 +59,31 @@ function InterRestPanel({ exercise }: { exercise: SessionExercise }) {
         </div>
       </div>
 
+      <span className={styles.editLabel}>{exercise.exerciseName}</span>
+
       <div className={styles.loadRow}>
         <label className={styles.field}>
           <span className={styles.fieldLabel}>Carga (kg)</span>
-          <NumericInput
-            value={working}
-            onChange={setWorking}
-            aria-label={`Carga de ${exercise.exerciseName} em kg`}
-          />
+          <NumericInput value={working} onChange={setWorking} aria-label="Carga em kg" />
         </label>
         <label className={styles.field}>
           <span className={styles.fieldLabel}>Adicional (kg)</span>
-          <NumericInput
-            value={additional}
-            onChange={setAdditional}
-            aria-label={`Peso adicional de ${exercise.exerciseName} em kg`}
+          <NumericInput value={additional} onChange={setAdditional} aria-label="Peso adicional em kg" />
+        </label>
+        <label className={styles.field}>
+          <span className={styles.fieldLabel}>Reps (alvo)</span>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={reps}
+            onChange={(e) => setReps(e.target.value)}
+            aria-label="Repetições alvo para os próximos treinos"
           />
         </label>
       </div>
 
       <span className={`${styles.hint} ${improved ? styles.hintImproved : ""}`}>
-        {improved
-          ? `${exercise.exerciseName}: +${formatKg(delta)} 💪`
-          : `${exercise.exerciseName} — total ${formatKg(after)}`}
+        {improved ? `+${formatKg(delta)} 💪` : `Carga total hoje: ${formatKg(after)}`}
       </span>
 
       {error && <p className={styles.error}>{error}</p>}

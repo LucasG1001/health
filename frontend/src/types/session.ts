@@ -21,6 +21,7 @@ export interface SessionSet {
 export interface SessionExercise {
   id: string;
   exerciseId: string | null;
+  splitExerciseId: string | null;
   exerciseName: string;
   muscleGroup: MuscleGroup | null;
   equipment: string | null;

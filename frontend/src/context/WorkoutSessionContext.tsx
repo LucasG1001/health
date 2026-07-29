@@ -8,14 +8,19 @@ import {
 } from "../utils/sessionMachine";
 import { apiErrorMessage } from "../utils/apiError";
 import { totalLoadKg } from "../utils/format";
-import { parseMaskedNumber } from "../utils/numberMask";
+import { INVALID, parseMaskedNumber, parseOptionalInteger } from "../utils/numberMask";
 import * as sessionService from "../services/sessionService";
 import * as exerciseService from "../services/exerciseService";
+import * as splitService from "../services/splitService";
 import { useSettings } from "../hooks/useSettings";
 import { useAudioCue } from "../hooks/useAudioCue";
 import { useRestTimer } from "../hooks/useRestTimer";
 import { useWakeLock } from "../hooks/useWakeLock";
-import { WorkoutSessionContext, type WorkoutSessionContextValue } from "./workoutSessionStore";
+import {
+  WorkoutSessionContext,
+  type InterRestInput,
+  type WorkoutSessionContextValue,
+} from "./workoutSessionStore";
 
 // v2: o snapshot perdeu o campo prepareCued; a chave nova evita ler o formato antigo.
 const SNAPSHOT_KEY = "health.activeSession.v2";
@@ -175,17 +180,24 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
     if (session) dispatch({ type: "SESSION_SYNCED", session });
   }, []);
 
-  // Confirmação do descanso entre exercícios: grava a carga do exercício que terminou,
-  // propaga a nova carga total para as séries já feitas e avança.
+  // Confirmação do descanso entre exercícios, para o exercício que acabou: a carga vale
+  // também para as séries de hoje (é o peso que estava no aparelho), as reps só mudam o
+  // alvo dos próximos treinos.
   const commitInterRest = useCallback(
-    async (workingMasked: string, additionalMasked: string) => {
-      const exercise = state.session?.exercises[state.currentExerciseIndex] ?? null;
-      if (exercise?.exerciseId != null) {
-        // Campo de carga vazio significa "não alterar", para um toque errado não apagar
-        // a carga do exercício; o adicional vazio significa "sem adicional".
-        const working = parseMaskedNumber(workingMasked) ?? exercise.workingWeightKg;
-        const additional = parseMaskedNumber(additionalMasked);
-        if (working !== exercise.workingWeightKg || additional !== exercise.additionalWeightKg) {
+    async (input: InterRestInput) => {
+      const session = state.session;
+      const exercise = session?.exercises[state.currentExerciseIndex] ?? null;
+      if (session && exercise) {
+        let touched = false;
+
+        // Campo vazio significa "não alterar", para um toque errado não apagar a carga;
+        // o adicional vazio significa "sem adicional".
+        const working = parseMaskedNumber(input.working) ?? exercise.workingWeightKg;
+        const additional = parseMaskedNumber(input.additional);
+        if (
+          exercise.exerciseId != null &&
+          (working !== exercise.workingWeightKg || additional !== exercise.additionalWeightKg)
+        ) {
           await exerciseService.updateExercise(exercise.exerciseId, {
             workingWeightKg: working,
             additionalWeightKg: additional,
@@ -196,8 +208,30 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
               await sessionService.updateSessionSet(set.id, { weightKg: total });
             }
           }
-          await refreshSession();
+          touched = true;
         }
+
+        // Reps mexem só no alvo: as séries já concluídas ficam com o que foi registrado
+        // de fato, então o volume de hoje não muda retroativamente.
+        const reps = parseOptionalInteger(input.reps, 1);
+        const currentReps = exercise.sets[0]?.targetRepsMin ?? null;
+        if (
+          reps !== INVALID &&
+          reps !== null &&
+          reps !== currentReps &&
+          session.splitId !== null &&
+          exercise.splitExerciseId !== null
+        ) {
+          const currentMax = exercise.sets[0]?.targetRepsMax ?? null;
+          await splitService.updateExercisePlan(session.splitId, exercise.splitExerciseId, {
+            targetRepsMin: reps,
+            // A faixa deixa de fazer sentido se o novo mínimo passa do máximo antigo.
+            targetRepsMax: currentMax != null && currentMax >= reps ? currentMax : null,
+          });
+          touched = true;
+        }
+
+        if (touched) await refreshSession();
       }
       dispatch({ type: "NEXT_EXERCISE" });
     },

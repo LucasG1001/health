@@ -39,6 +39,7 @@ function toExercise(row: SessionExerciseRow, setRows: SessionSetRow[]): SessionE
   return {
     id: row.id,
     exerciseId: row.exercise_id,
+    splitExerciseId: row.split_exercise_id,
     exerciseName: row.exercise_name,
     muscleGroup: row.muscle_group,
     equipment: row.equipment,
@@ -67,11 +68,20 @@ function toSession(row: SessionRow, exercises: SessionExercise[]): WorkoutSessio
   };
 }
 
+// split_exercise_id é resolvido pela divisão da sessão (não há coluna): é o que permite
+// editar o plano do exercício sem precisar carregar a divisão na tela de execução.
+const SPLIT_EXERCISE_SQL = `
+  (SELECT sx.id FROM split_exercises sx
+    WHERE sx.split_id = ws.split_id AND sx.exercise_id = se.exercise_id) AS split_exercise_id
+`;
+
 const EXERCISES_SQL = `
   SELECT se.id, se.session_id, se.exercise_id, se.exercise_name, se.position, se.notes,
          e.muscle_group, e.equipment, e.image_path, e.image_url, e.machine_setting,
-         e.working_weight_kg, e.additional_weight_kg
+         e.working_weight_kg, e.additional_weight_kg,
+         ${SPLIT_EXERCISE_SQL}
     FROM session_exercises se
+    JOIN workout_sessions ws ON ws.id = se.session_id
     LEFT JOIN exercises e ON e.id = se.exercise_id
    WHERE se.session_id = $1
    ORDER BY se.position ASC
@@ -374,8 +384,10 @@ async function findExercise(sessionExerciseId: string): Promise<SessionExercise 
   const exercises = await pool.query<SessionExerciseRow>(
     `SELECT se.id, se.session_id, se.exercise_id, se.exercise_name, se.position, se.notes,
             e.muscle_group, e.equipment, e.image_path, e.image_url, e.machine_setting,
-            e.working_weight_kg, e.additional_weight_kg
+            e.working_weight_kg, e.additional_weight_kg,
+            ${SPLIT_EXERCISE_SQL}
        FROM session_exercises se
+       JOIN workout_sessions ws ON ws.id = se.session_id
        LEFT JOIN exercises e ON e.id = se.exercise_id
       WHERE se.id = $1`,
     [sessionExerciseId]

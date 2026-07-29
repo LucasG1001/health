@@ -49,7 +49,9 @@ export const replaceSplitExercisesSchema = z.object({
 
 export const updateExercisePlanSchema = z
   .object({
-    series: z.number().int().min(1, "Informe ao menos uma série.").max(20, "Máximo de 20 séries."),
+    // Opcional: sem `series` só os alvos mudam, sem recriar as séries planejadas — é o que
+    // o painel de descanso precisa para ajustar reps sem mexer na quantidade.
+    series: z.number().int().min(1, "Informe ao menos uma série.").max(20, "Máximo de 20 séries.").optional(),
     targetRepsMin: z.number().int().min(1, "Repetições alvo inválidas.").max(200),
     targetRepsMax: z.number().int().min(1).max(200).nullish(),
     restSeconds: z.number().int().min(0).max(3600).nullish(),

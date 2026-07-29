@@ -2,6 +2,13 @@ import { createContext, useContext } from "react";
 import type { SessionState } from "../utils/sessionMachine";
 import type { WorkoutSession, FinishResponse } from "../types/session";
 
+/** Campos do painel de descanso, como texto: vazio significa "não alterar". */
+export interface InterRestInput {
+  working: string;
+  additional: string;
+  reps: string;
+}
+
 export interface WorkoutSessionContextValue {
   state: SessionState;
   hydrating: boolean;
@@ -26,7 +33,7 @@ export interface WorkoutSessionContextValue {
   editSet: (setId: string, patch: { weightKg?: number | null; reps?: number | null; rpe?: number | null; completed?: boolean }) => Promise<void>;
   removeExercise: (sessionExerciseId: string) => Promise<void>;
   refreshSession: () => Promise<void>;
-  commitInterRest: (workingMasked: string, additionalMasked: string) => Promise<void>;
+  commitInterRest: (input: InterRestInput) => Promise<void>;
   finish: () => Promise<FinishResponse>;
   discard: () => Promise<void>;
 }

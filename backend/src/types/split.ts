@@ -92,7 +92,8 @@ export interface SplitExerciseInput {
 }
 
 export interface UpdateExercisePlanInput {
-  series: number;
+  /** Ausente = mantém a quantidade de séries e só atualiza os alvos. */
+  series?: number;
   targetRepsMin: number;
   targetRepsMax?: number | null;
   restSeconds?: number | null;

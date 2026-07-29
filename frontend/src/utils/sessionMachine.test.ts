@@ -38,6 +38,7 @@ function makeSession(): WorkoutSession {
       {
         id: "se-1",
         exerciseId: "ex-1",
+        splitExerciseId: "sx-1",
         exerciseName: "Supino reto",
         muscleGroup: "chest",
         equipment: "Barra",
@@ -52,6 +53,7 @@ function makeSession(): WorkoutSession {
       {
         id: "se-2",
         exerciseId: "ex-2",
+        splitExerciseId: "sx-2",
         exerciseName: "Crucifixo",
         muscleGroup: "chest",
         equipment: "Halteres",
