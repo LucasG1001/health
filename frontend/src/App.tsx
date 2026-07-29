@@ -3,6 +3,7 @@ import { BrowserRouter, Link, Navigate, Route, Routes } from "react-router-dom";
 import { WorkoutSessionProvider } from "./context/WorkoutSessionContext";
 import { Sidebar } from "./components/Sidebar/Sidebar";
 import { ActiveSessionBar } from "./components/ActiveSessionBar/ActiveSessionBar";
+import { InterRestModal } from "./components/InterRestModal/InterRestModal";
 import { EmptyState } from "./components/EmptyState/EmptyState";
 import { ErrorBoundary } from "./components/ErrorBoundary/ErrorBoundary";
 import { DumbbellIcon } from "./components/Icon/icons";
@@ -75,6 +76,7 @@ function Layout() {
         </Routes>
       </main>
       <ActiveSessionBar />
+      <InterRestModal />
     </div>
   );
 }

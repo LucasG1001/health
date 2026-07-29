@@ -43,7 +43,9 @@ function makeSession(): WorkoutSession {
         equipment: "Barra",
         imageUrl: null,
         machineSetting: null,
-        position: 0,
+        workingWeightKg: 40,
+        additionalWeightKg: null,
+        position:0,
         notes: null,
         sets: [makeSet("set-1"), makeSet("set-2")],
       },
@@ -55,7 +57,9 @@ function makeSession(): WorkoutSession {
         equipment: "Halteres",
         imageUrl: null,
         machineSetting: null,
-        position: 1,
+        workingWeightKg: 40,
+        additionalWeightKg: null,
+        position:1,
         notes: null,
         sets: [makeSet("set-3")],
       },
@@ -245,6 +249,57 @@ describe("sessionReducer", () => {
     let state = sessionReducer(initialSessionState, { type: "START", session });
     state = sessionReducer(state, { type: "NEXT_EXERCISE" });
     expect(state.phase).toBe("overview");
+  });
+
+  it("SESSION_SYNCED preserva a fase e a contagem de descanso", () => {
+    let state = startedState();
+    state = sessionReducer(state, {
+      type: "COMPLETE_SET",
+      set: makeSet("set-1", true),
+      restMs: 60000,
+      now: 1_000,
+    });
+    expect(state.phase).toBe("resting");
+
+    // O plano mudou no meio do treino: a série pendente agora pede 10 reps.
+    const synced = makeSession();
+    synced.exercises[0]!.sets = [
+      makeSet("set-1", true),
+      { ...makeSet("set-2"), targetRepsMin: 10 },
+    ];
+    state = sessionReducer(state, { type: "SESSION_SYNCED", session: synced });
+
+    expect(state.phase).toBe("resting");
+    expect(state.restEndsAt).toBe(61_000);
+    expect(state.restTotalMs).toBe(60_000);
+    expect(state.session!.exercises[0]!.sets[1]!.targetRepsMin).toBe(10);
+  });
+
+  it("SESSION_SYNCED reconcilia a fase quando o plano tira as séries pendentes", () => {
+    let state = startedState();
+    expect(state.phase).toBe("exercising");
+    const synced = makeSession();
+    synced.exercises[0]!.sets = [makeSet("set-1", true)];
+    state = sessionReducer(state, { type: "SESSION_SYNCED", session: synced });
+    expect(state.phase).toBe("exerciseDone");
+    expect(state.currentSetIndex).toBe(0);
+  });
+
+  it("SESSION_SYNCED faz clamp do índice quando o exercício perde séries", () => {
+    let state = startedState();
+    state = sessionReducer(state, { type: "REST_ENDED" });
+    state = { ...state, currentSetIndex: 1 };
+    const synced = makeSession();
+    synced.exercises[0]!.sets = [makeSet("set-1")];
+    state = sessionReducer(state, { type: "SESSION_SYNCED", session: synced });
+    expect(state.currentSetIndex).toBe(0);
+  });
+
+  it("SESSION_SYNCED ignora sessão diferente da atual", () => {
+    const state = startedState();
+    const other = { ...makeSession(), id: "outra" };
+    const next = sessionReducer(state, { type: "SESSION_SYNCED", session: other });
+    expect(next).toBe(state);
   });
 
   it("HYDRATE restaura fase e timer do snapshot da mesma sessão", () => {

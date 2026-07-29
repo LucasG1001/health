@@ -6,7 +6,6 @@ import { Modal } from "../../components/Modal/Modal";
 import { ConfirmDialog } from "../../components/ConfirmDialog/ConfirmDialog";
 import { DayOfWeekPicker } from "../../components/DayOfWeekPicker/DayOfWeekPicker";
 import { SetStepper } from "../../components/SetStepper/SetStepper";
-import { InterRestModal } from "../../components/InterRestModal/InterRestModal";
 import { ExerciseThumb } from "../../components/ExerciseThumb/ExerciseThumb";
 import {
   ChevronLeftIcon,
@@ -23,15 +22,14 @@ import { useWorkoutSession } from "../../context/workoutSessionStore";
 import { useNow } from "../../hooks/useNow";
 import { completedSetsOf, firstPendingSetIndex, hasPendingSets } from "../../utils/sessionMachine";
 import { createSplit, fetchSplit, replaceSplitExercises, updateSplit } from "../../services/splitService";
-import { updateExercise } from "../../services/exerciseService";
-import { numberToMask, parseMaskedNumber } from "../../utils/numberMask";
 import {
   MUSCLE_GROUP_LABELS,
   formatClock,
-  formatKg,
+  formatLoad,
   formatStopwatch,
   muscleSummary,
   repsTarget,
+  totalLoadKg,
 } from "../../utils/format";
 import { apiErrorMessage } from "../../utils/apiError";
 import type { Split, SplitExercise, SplitExerciseInput } from "../../types/split";
@@ -75,8 +73,6 @@ export function SplitEditorPage() {
     skipRest,
     finish,
     editSet,
-    extendRest,
-    nextExercise,
   } = useWorkoutSession();
 
   const session = state.session;
@@ -307,7 +303,7 @@ export function SplitEditorPage() {
         const pending = sx.sets[firstPendingSetIndex(sx)]!;
         await completeSet({
           setId: pending.id,
-          weightKg: pending.weightKg ?? exercise.workingWeightKg ?? null,
+          weightKg: pending.weightKg ?? totalLoadKg(sx.workingWeightKg, sx.additionalWeightKg),
           reps: pending.reps ?? pending.targetRepsMin ?? 1,
           restMs: restMsFor(pending),
           interRestMs: restMsFor(pending),
@@ -329,7 +325,7 @@ export function SplitEditorPage() {
           // Sem peso e reps a série conta como feita mas soma zero no volume do treino.
           await editSet(set.id, {
             completed: true,
-            weightKg: set.weightKg ?? exercise.workingWeightKg ?? null,
+            weightKg: set.weightKg ?? totalLoadKg(match.sx.workingWeightKg, match.sx.additionalWeightKg),
             reps: set.reps ?? set.targetRepsMin ?? 1,
           });
         }
@@ -352,43 +348,6 @@ export function SplitEditorPage() {
       } catch (err) {
         setError(apiErrorMessage(err, "Não foi possível reabrir o exercício."));
       }
-    });
-
-  const handleInterRestDone = (weightMasked: string) =>
-    runExclusive(async () => {
-      const finishedSx = session?.exercises[state.currentExerciseIndex] ?? null;
-      const finishedSplitEx = finishedSx
-        ? split?.exercises.find((e) => e.exerciseId === finishedSx.exerciseId) ?? null
-        : null;
-      const parsed = parseMaskedNumber(weightMasked);
-      const changed =
-        finishedSx !== null &&
-        finishedSplitEx !== null &&
-        parsed !== null &&
-        parsed !== finishedSplitEx.workingWeightKg;
-      setError(null);
-      if (changed) {
-        try {
-          await updateExercise(finishedSplitEx.exerciseId, { workingWeightKg: parsed });
-          setSplit((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  exercises: prev.exercises.map((e) =>
-                    e.exerciseId === finishedSplitEx.exerciseId ? { ...e, workingWeightKg: parsed } : e
-                  ),
-                }
-              : prev
-          );
-          for (const set of finishedSx.sets) {
-            if (set.completedAt !== null) await editSet(set.id, { weightKg: parsed });
-          }
-        } catch (err) {
-          setError(apiErrorMessage(err, "Não foi possível salvar a carga."));
-          return;
-        }
-      }
-      nextExercise();
     });
 
   const removeExercise = async (sxId: string) => {
@@ -436,12 +395,6 @@ export function SplitEditorPage() {
   const muscles = split ? muscleSummary(split.exercises) : "";
   const elapsedMs = inProgress && session ? now - new Date(session.startedAt).getTime() : 0;
 
-  const interRestActive = inProgress && session !== null && state.phase === "interRest";
-  const finishedSx = interRestActive ? session!.exercises[state.currentExerciseIndex] ?? null : null;
-  const finishedSplitEx = finishedSx
-    ? split?.exercises.find((e) => e.exerciseId === finishedSx.exerciseId) ?? null
-    : null;
-
   return (
     <div className={styles.page}>
       <header className={styles.topBar}>
@@ -480,6 +433,10 @@ export function SplitEditorPage() {
               {planList.map((exercise, index) => {
                 const match = sessionExerciseFor(exercise);
                 const sx = match?.sx ?? null;
+                // Durante o treino a carga vem da sessão, que o refreshSession mantém
+                // fresca — assim editar a carga reflete na linha na hora.
+                const workingKg = sx ? sx.workingWeightKg : exercise.workingWeightKg;
+                const additionalKg = sx ? sx.additionalWeightKg : exercise.additionalWeightKg;
                 const total = sx ? sx.sets.length : exercise.plannedSets.length;
                 const completed = sx ? completedSetsOf(sx) : 0;
                 const done = sx ? !hasPendingSets(sx) : false;
@@ -528,7 +485,7 @@ export function SplitEditorPage() {
                               exercise.plannedSets[0]?.targetRepsMin ?? null,
                               exercise.plannedSets[0]?.targetRepsMax ?? null
                             )}{" "}
-                            | {formatKg(exercise.workingWeightKg)}
+                            | {formatLoad(workingKg, additionalKg)}
                           </span>
                         </div>
                         <ChevronRightIcon className={styles.chevron} />
@@ -675,18 +632,6 @@ export function SplitEditorPage() {
             <DayOfWeekPicker value={editWeekdays} onChange={setEditWeekdays} />
           </div>
         </Modal>
-      )}
-
-      {interRestActive && finishedSx && (
-        <InterRestModal
-          remainingMs={restRemainingMs}
-          progress={restProgress}
-          finishedName={finishedSx.exerciseName}
-          initialWeight={numberToMask(finishedSplitEx?.workingWeightKg)}
-          onExtend={extendRest}
-          onDone={handleInterRestDone}
-          saving={busy}
-        />
       )}
 
       {removingId && (

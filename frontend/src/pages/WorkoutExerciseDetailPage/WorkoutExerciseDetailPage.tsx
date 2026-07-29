@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { YouTubeEmbed } from "../../components/YouTubeEmbed/YouTubeEmbed";
 import { NumericInput } from "../../components/NumericInput/NumericInput";
+import { useWorkoutSession } from "../../context/workoutSessionStore";
 import { updateExercisePlan, fetchSplit } from "../../services/splitService";
 import { updateExercise } from "../../services/exerciseService";
 import { MUSCLE_GROUP_LABELS, formatClock, formatKg, imageFocalStyle, repsTarget } from "../../utils/format";
@@ -13,7 +14,7 @@ import styles from "./WorkoutExerciseDetailPage.module.css";
 
 const DEFAULT_REST_SECONDS = 60;
 
-type EditField = "series" | "reps" | "carga" | "descanso";
+type EditField = "series" | "reps" | "carga" | "adicional" | "descanso";
 
 function parsePositiveInt(raw: string): number | null {
   const parsed = Number(raw);
@@ -27,6 +28,8 @@ function parseNonNegativeInt(raw: string): number | null {
 
 export function WorkoutExerciseDetailPage() {
   const { id, sxId } = useParams();
+  const { state, refreshSession } = useWorkoutSession();
+  const sessionActive = state.session !== null && state.session.status === "in_progress";
 
   const [split, setSplit] = useState<Split | null>(null);
   const [loading, setLoading] = useState(true);
@@ -36,6 +39,7 @@ export function WorkoutExerciseDetailPage() {
   const [repsMin, setRepsMin] = useState("");
   const [repsMax, setRepsMax] = useState("");
   const [weight, setWeight] = useState("");
+  const [additional, setAdditional] = useState("");
   const [rest, setRest] = useState("");
 
   const backTo = `/treino/divisoes/${id}`;
@@ -53,6 +57,7 @@ export function WorkoutExerciseDetailPage() {
           setRepsMin(String(ex.plannedSets[0]?.targetRepsMin ?? 12));
           setRepsMax(ex.plannedSets[0]?.targetRepsMax != null ? String(ex.plannedSets[0].targetRepsMax) : "");
           setWeight(numberToMask(ex.workingWeightKg));
+          setAdditional(numberToMask(ex.additionalWeightKg));
           setRest(String(ex.restSeconds ?? DEFAULT_REST_SECONDS));
         }
       })
@@ -80,13 +85,33 @@ export function WorkoutExerciseDetailPage() {
     if (!id || !sxId || !planned) return;
     const seriesValue = parsePositiveInt(series);
     const minValue = parsePositiveInt(repsMin);
-    if (seriesValue === null || minValue === null) return;
     const maxValue = repsMax.trim() === "" ? null : parsePositiveInt(repsMax);
+    // Antes um valor inválido era descartado em silêncio: a tela voltava ao valor antigo
+    // sem dizer nada, e o campo continuava com o texto errado.
+    if (seriesValue === null || minValue === null || (repsMax.trim() !== "" && maxValue === null)) {
+      setError("Séries e repetições precisam ser números inteiros maiores que zero.");
+      setSeries(String(planned.plannedSets.length || 3));
+      setRepsMin(String(planned.plannedSets[0]?.targetRepsMin ?? 12));
+      setRepsMax(planned.plannedSets[0]?.targetRepsMax != null ? String(planned.plannedSets[0].targetRepsMax) : "");
+      return;
+    }
+    if (maxValue !== null && maxValue < minValue) {
+      setError("O máximo de repetições não pode ser menor que o mínimo.");
+      return;
+    }
     const weightValue = parseMaskedNumber(weight);
+    const additionalValue = parseMaskedNumber(additional);
     const restValue = parseNonNegativeInt(rest) ?? DEFAULT_REST_SECONDS;
+    setError(null);
     try {
-      if (weightValue !== (planned.workingWeightKg ?? null)) {
-        await updateExercise(planned.exerciseId, { workingWeightKg: weightValue });
+      if (
+        weightValue !== (planned.workingWeightKg ?? null) ||
+        additionalValue !== (planned.additionalWeightKg ?? null)
+      ) {
+        await updateExercise(planned.exerciseId, {
+          workingWeightKg: weightValue,
+          additionalWeightKg: additionalValue,
+        });
       }
       const updated = await updateExercisePlan(id, sxId, {
         series: seriesValue,
@@ -95,6 +120,9 @@ export function WorkoutExerciseDetailPage() {
         restSeconds: restValue,
       });
       setSplit(updated);
+      // O backend já ajustou as séries pendentes do treino em andamento; recarregar a
+      // sessão faz a mudança aparecer no treino atual, sem esperar o próximo.
+      if (sessionActive) await refreshSession();
     } catch (err) {
       setError(apiErrorMessage(err, "Não foi possível salvar o exercício."));
     }
@@ -203,6 +231,24 @@ export function WorkoutExerciseDetailPage() {
                 </span>
               )}
               <span className={styles.statLabel}>carga</span>
+            </div>
+
+            <div className={`${styles.statCard} ${styles.statCardEditable}`} onClick={() => startEdit("adicional")}>
+              {editing === "adicional" ? (
+                <NumericInput
+                  className={styles.statInput}
+                  placeholder="—"
+                  value={additional}
+                  autoFocus
+                  onChange={setAdditional}
+                  onBlur={saveEdit}
+                  onKeyDown={onEditKeyDown}
+                  aria-label="Peso adicional em kg"
+                />
+              ) : (
+                <span className={styles.statValue}>{formatKg(planned.additionalWeightKg)}</span>
+              )}
+              <span className={styles.statLabel}>adicional</span>
             </div>
 
             <div className={`${styles.statCard} ${styles.statCardEditable}`} onClick={() => startEdit("descanso")}>

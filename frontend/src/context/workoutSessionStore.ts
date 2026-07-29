@@ -25,6 +25,8 @@ export interface WorkoutSessionContextValue {
   nextExercise: () => void;
   editSet: (setId: string, patch: { weightKg?: number | null; reps?: number | null; rpe?: number | null; completed?: boolean }) => Promise<void>;
   removeExercise: (sessionExerciseId: string) => Promise<void>;
+  refreshSession: () => Promise<void>;
+  commitInterRest: (workingMasked: string, additionalMasked: string) => Promise<void>;
   finish: () => Promise<FinishResponse>;
   discard: () => Promise<void>;
 }

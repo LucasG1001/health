@@ -1,7 +1,7 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import { useWorkoutSession } from "../../context/workoutSessionStore";
 import { useNow } from "../../hooks/useNow";
-import { formatClock } from "../../utils/format";
+import { formatStopwatch } from "../../utils/format";
 import { PlayIcon } from "../Icon/icons";
 import styles from "./ActiveSessionBar.module.css";
 
@@ -19,7 +19,8 @@ export function ActiveSessionBar() {
     location.pathname === workoutPath ||
     (splitId !== null && location.pathname.startsWith(`/treino/divisoes/${splitId}/`));
 
-  if (!active || onWorkoutScreen) return null;
+  // O painel de descanso entre exercícios ocupa o mesmo canto e já mostra a sessão.
+  if (!active || onWorkoutScreen || state.phase === "interRest") return null;
 
   const elapsedMs = now - new Date(state.session!.startedAt).getTime();
 
@@ -29,7 +30,7 @@ export function ActiveSessionBar() {
       <span className={styles.label}>
         Treino em andamento · {state.session!.splitName}
       </span>
-      <span className={styles.time}>{formatClock(elapsedMs)}</span>
+      <span className={styles.time}>{formatStopwatch(elapsedMs)}</span>
       <PlayIcon className={styles.icon} />
     </button>
   );

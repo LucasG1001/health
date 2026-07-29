@@ -10,6 +10,28 @@ export function formatKg(value: number | null | undefined): string {
   return `${value.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} kg`;
 }
 
+/**
+ * Carga levantada = pilha do aparelho + peso adicional. Null só quando nenhum dos dois é
+ * conhecido, para não confundir "sem carga registrada" com "0 kg".
+ */
+export function totalLoadKg(
+  workingKg: number | null | undefined,
+  additionalKg: number | null | undefined
+): number | null {
+  if (workingKg == null && additionalKg == null) return null;
+  return (workingKg ?? 0) + (additionalKg ?? 0);
+}
+
+/** `22,2 + 15 kg` quando há adicional; `22,2 kg` quando não; `—` sem carga. */
+export function formatLoad(
+  workingKg: number | null | undefined,
+  additionalKg: number | null | undefined
+): string {
+  if (workingKg == null && additionalKg == null) return "—";
+  if (additionalKg == null || additionalKg === 0) return formatKg(workingKg ?? 0);
+  return `${formatNumber(workingKg ?? 0, 1)} + ${formatKg(additionalKg)}`;
+}
+
 export function formatCm(value: number | null | undefined): string {
   if (value == null) return "—";
   return `${value.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} cm`;

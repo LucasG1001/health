@@ -33,6 +33,15 @@ export function calcTdee(bmr: number, activityLevel: ActivityLevel): number {
   return Math.round(bmr * ACTIVITY_FACTORS[activityLevel]);
 }
 
+/**
+ * Carga levantada = pilha do aparelho + peso adicional. Devolve null só quando nenhum dos
+ * dois é conhecido, para não confundir "sem carga registrada" com "0 kg".
+ */
+export function totalLoadKg(workingKg: number | null, additionalKg: number | null): number | null {
+  if (workingKg == null && additionalKg == null) return null;
+  return (workingKg ?? 0) + (additionalKg ?? 0);
+}
+
 export function calcEpley1Rm(weightKg: number, reps: number): number {
   if (reps <= 1) return round1(weightKg);
   return round1(weightKg * (1 + reps / 30));

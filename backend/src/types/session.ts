@@ -29,6 +29,8 @@ export interface SessionExerciseRow {
   image_path: string | null;
   image_url: string | null;
   machine_setting: string | null;
+  working_weight_kg: number | null;
+  additional_weight_kg: number | null;
 }
 
 export interface SessionSetRow {
@@ -70,6 +72,9 @@ export interface SessionExercise {
   equipment: string | null;
   imageUrl: string | null;
   machineSetting: string | null;
+  /** Carga atual do catálogo, para a tela de execução não depender de carregar a divisão. */
+  workingWeightKg: number | null;
+  additionalWeightKg: number | null;
   position: number;
   notes: string | null;
   sets: SessionSet[];

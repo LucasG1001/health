@@ -128,6 +128,12 @@ export async function migrate(): Promise<void> {
     ALTER TABLE exercises ADD COLUMN IF NOT EXISTS working_weight_kg NUMERIC(6,2);
   `);
 
+  // Peso extra somado à pilha (rodinha/anilha do aparelho). A carga levantada é a soma
+  // das duas, e é ela que vai para session_sets.weight_kg.
+  await pool.query(`
+    ALTER TABLE exercises ADD COLUMN IF NOT EXISTS additional_weight_kg NUMERIC(6,2);
+  `);
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS workout_splits (
       id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),

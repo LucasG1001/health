@@ -20,6 +20,7 @@ export interface SplitExerciseRow {
   position: number;
   rest_seconds: number | null;
   working_weight_kg: number | null;
+  additional_weight_kg: number | null;
   notes: string | null;
   exercise_name: string;
   muscle_group: MuscleGroup;
@@ -63,6 +64,7 @@ export interface SplitExercise {
   position: number;
   restSeconds: number | null;
   workingWeightKg: number | null;
+  additionalWeightKg: number | null;
   videoUrl: string | null;
   instructions: string | null;
   notes: string | null;

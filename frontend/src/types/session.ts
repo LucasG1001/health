@@ -26,6 +26,8 @@ export interface SessionExercise {
   equipment: string | null;
   imageUrl: string | null;
   machineSetting: string | null;
+  workingWeightKg: number | null;
+  additionalWeightKg: number | null;
   position: number;
   notes: string | null;
   sets: SessionSet[];

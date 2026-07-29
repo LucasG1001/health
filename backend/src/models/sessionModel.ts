@@ -1,5 +1,6 @@
 import { pool, rollback } from "../database/connection.js";
 import { APP_TIMEZONE } from "../lib/dateUtils.js";
+import { totalLoadKg } from "../lib/calculations.js";
 import { buildUpdateSet } from "../lib/sqlUpdate.js";
 import { resolveImageUrl } from "./exerciseModel.js";
 import { isUniqueViolation } from "../lib/pgError.js";
@@ -43,6 +44,8 @@ function toExercise(row: SessionExerciseRow, setRows: SessionSetRow[]): SessionE
     equipment: row.equipment,
     imageUrl: resolveImageUrl(row),
     machineSetting: row.machine_setting,
+    workingWeightKg: row.working_weight_kg,
+    additionalWeightKg: row.additional_weight_kg,
     position: row.position,
     notes: row.notes,
     sets: setRows.filter((set) => set.session_exercise_id === row.id).map(toSet),
@@ -66,7 +69,8 @@ function toSession(row: SessionRow, exercises: SessionExercise[]): WorkoutSessio
 
 const EXERCISES_SQL = `
   SELECT se.id, se.session_id, se.exercise_id, se.exercise_name, se.position, se.notes,
-         e.muscle_group, e.equipment, e.image_path, e.image_url, e.machine_setting
+         e.muscle_group, e.equipment, e.image_path, e.image_url, e.machine_setting,
+         e.working_weight_kg, e.additional_weight_kg
     FROM session_exercises se
     LEFT JOIN exercises e ON e.id = se.exercise_id
    WHERE se.session_id = $1
@@ -174,6 +178,7 @@ interface StartPlanRow {
   exercise_position: number;
   exercise_rest_seconds: number | null;
   exercise_working_weight_kg: number | null;
+  exercise_additional_weight_kg: number | null;
   set_id: string | null;
   set_position: number | null;
   target_reps_min: number | null;
@@ -193,6 +198,7 @@ export async function start(splitId: string): Promise<WorkoutSession> {
     `SELECT se.id AS split_exercise_id, se.exercise_id, e.name AS exercise_name,
             se.position AS exercise_position, se.rest_seconds AS exercise_rest_seconds,
             e.working_weight_kg AS exercise_working_weight_kg,
+            e.additional_weight_kg AS exercise_additional_weight_kg,
             ps.id AS set_id, ps.position AS set_position,
             ps.target_reps_min, ps.target_reps_max
        FROM split_exercises se
@@ -238,7 +244,7 @@ export async function start(splitId: string): Promise<WorkoutSession> {
         const set = plannedSets[i]!;
         await client.query(
           // Séries planejadas não têm tipo nem carga própria: toda série materializada é
-          // de trabalho, com o descanso do exercício e a carga do catálogo.
+          // de trabalho, com o descanso do exercício e a carga total do catálogo.
           `INSERT INTO session_sets
              (session_exercise_id, position, target_reps_min, target_reps_max, rest_seconds, weight_kg)
            VALUES ($1, $2, $3, $4, $5, $6)`,
@@ -248,7 +254,7 @@ export async function start(splitId: string): Promise<WorkoutSession> {
             set.target_reps_min,
             set.target_reps_max,
             set.exercise_rest_seconds,
-            set.exercise_working_weight_kg,
+            totalLoadKg(set.exercise_working_weight_kg, set.exercise_additional_weight_kg),
           ]
         );
       }
@@ -288,13 +294,19 @@ export async function addExercise(sessionId: string, exerciseId: string): Promis
   );
   if (!session.rows[0]) return null;
 
-  const exercise = await pool.query<{ id: string; name: string }>(
-    "SELECT id, name FROM exercises WHERE id = $1",
-    [exerciseId]
-  );
-  if (!exercise.rows[0]) {
+  const exercise = await pool.query<{
+    id: string;
+    name: string;
+    working_weight_kg: number | null;
+    additional_weight_kg: number | null;
+  }>("SELECT id, name, working_weight_kg, additional_weight_kg FROM exercises WHERE id = $1", [
+    exerciseId,
+  ]);
+  const catalog = exercise.rows[0];
+  if (!catalog) {
     throw new DomainError("Exercício não encontrado.", 404);
   }
+  const weightKg = totalLoadKg(catalog.working_weight_kg, catalog.additional_weight_kg);
 
   // Os 4 inserts precisam ser atômicos: em conexões separadas uma falha no meio deixava
   // um exercício de sessão com menos séries do que deveria, sem rollback.
@@ -307,15 +319,15 @@ export async function addExercise(sessionId: string, exerciseId: string): Promis
        VALUES ($1, $2, $3,
          (SELECT COALESCE(MAX(position), -1) + 1 FROM session_exercises WHERE session_id = $1))
        RETURNING id`,
-      [sessionId, exerciseId, exercise.rows[0].name]
+      [sessionId, exerciseId, catalog.name]
     );
     sessionExerciseId = inserted.rows[0]!.id;
 
     for (let position = 0; position < 3; position++) {
       await client.query(
-        `INSERT INTO session_sets (session_exercise_id, position, set_type, variation)
-         VALUES ($1, $2, 'working', 'normal')`,
-        [sessionExerciseId, position]
+        `INSERT INTO session_sets (session_exercise_id, position, weight_kg)
+         VALUES ($1, $2, $3)`,
+        [sessionExerciseId, position, weightKg]
       );
     }
     await client.query("COMMIT");
@@ -361,7 +373,8 @@ async function assertEditableBySet(setId: string): Promise<void> {
 async function findExercise(sessionExerciseId: string): Promise<SessionExercise | null> {
   const exercises = await pool.query<SessionExerciseRow>(
     `SELECT se.id, se.session_id, se.exercise_id, se.exercise_name, se.position, se.notes,
-            e.muscle_group, e.equipment, e.image_path, e.image_url, e.machine_setting
+            e.muscle_group, e.equipment, e.image_path, e.image_url, e.machine_setting,
+            e.working_weight_kg, e.additional_weight_kg
        FROM session_exercises se
        LEFT JOIN exercises e ON e.id = se.exercise_id
       WHERE se.id = $1`,

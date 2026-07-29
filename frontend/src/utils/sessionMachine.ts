@@ -22,6 +22,7 @@ export interface SessionSnapshot {
 
 export type SessionAction =
   | { type: "HYDRATE"; session: WorkoutSession; snapshot: SessionSnapshot | null }
+  | { type: "SESSION_SYNCED"; session: WorkoutSession }
   | { type: "START"; session: WorkoutSession }
   | { type: "PLAY_EXERCISE"; exerciseIndex: number }
   | { type: "COMPLETE_SET"; set: SessionSet; restMs: number; interRestMs?: number; now: number }
@@ -141,6 +142,25 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
         };
       }
       return { ...initialSessionState, session, phase: "overview" };
+    }
+
+    // Recarga da mesma sessão vinda do servidor (ex.: o plano mudou no meio do treino).
+    // Preserva fase e contagem de descanso; só reconcilia índices e pendências.
+    case "SESSION_SYNCED": {
+      if (!state.session || state.session.id !== action.session.id) return state;
+      const exerciseIndex = Math.max(
+        0,
+        Math.min(state.currentExerciseIndex, action.session.exercises.length - 1)
+      );
+      const setCount = action.session.exercises[exerciseIndex]?.sets.length ?? 0;
+      return withSession(
+        {
+          ...state,
+          currentExerciseIndex: exerciseIndex,
+          currentSetIndex: Math.max(0, Math.min(state.currentSetIndex, setCount - 1)),
+        },
+        action.session
+      );
     }
 
     case "START":

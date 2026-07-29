@@ -25,6 +25,7 @@ export interface SplitExercise {
   position: number;
   restSeconds: number | null;
   workingWeightKg: number | null;
+  additionalWeightKg: number | null;
   videoUrl: string | null;
   instructions: string | null;
   notes: string | null;

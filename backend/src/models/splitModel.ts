@@ -1,3 +1,4 @@
+import type pg from "pg";
 import { pool, rollback } from "../database/connection.js";
 import { buildUpdateSet } from "../lib/sqlUpdate.js";
 import { resolveImageUrl } from "./exerciseModel.js";
@@ -38,6 +39,7 @@ function toSplitExercise(row: SplitExerciseRow, plannedSetRows: PlannedSetRow[])
     position: row.position,
     restSeconds: row.rest_seconds,
     workingWeightKg: row.working_weight_kg,
+    additionalWeightKg: row.additional_weight_kg,
     videoUrl: row.video_url,
     instructions: row.exercise_notes,
     notes: row.notes,
@@ -54,7 +56,7 @@ function toSplitExercise(row: SplitExerciseRow, plannedSetRows: PlannedSetRow[])
 
 const EXERCISES_SQL = `
   SELECT se.id, se.split_id, se.exercise_id, se.position, se.rest_seconds, se.notes,
-         e.working_weight_kg,
+         e.working_weight_kg, e.additional_weight_kg,
          e.name AS exercise_name, e.muscle_group, e.equipment, e.image_path, e.image_url,
          e.image_focal_x, e.image_focal_y, e.image_zoom, e.machine_setting,
          e.video_url, e.notes AS exercise_notes
@@ -204,16 +206,97 @@ export async function replaceExercises(
   return findById(splitId);
 }
 
+/**
+ * Reflete a mudança de plano no treino em andamento, se houver. `session_sets` é uma cópia
+ * materializada no start, então sem isto a edição só valia para o próximo treino.
+ * Séries já concluídas são histórico e nunca são tocadas.
+ */
+async function syncActiveSession(
+  client: pg.PoolClient,
+  exerciseId: string,
+  input: UpdateExercisePlanInput
+): Promise<void> {
+  const active = await client.query<{ id: string }>(
+    `SELECT se.id
+       FROM session_exercises se
+       JOIN workout_sessions ws ON ws.id = se.session_id
+      WHERE ws.status = 'in_progress' AND se.exercise_id = $1`,
+    [exerciseId]
+  );
+  const sessionExercise = active.rows[0];
+  if (!sessionExercise) return;
+
+  const restColumn = input.restSeconds !== undefined ? ", rest_seconds = $4" : "";
+  const values: unknown[] = [
+    sessionExercise.id,
+    input.targetRepsMin,
+    input.targetRepsMax ?? null,
+    ...(input.restSeconds !== undefined ? [input.restSeconds] : []),
+  ];
+  await client.query(
+    `UPDATE session_sets SET target_reps_min = $2, target_reps_max = $3${restColumn}
+      WHERE session_exercise_id = $1 AND completed_at IS NULL`,
+    values
+  );
+
+  const counts = await client.query<{ total: number; done: number }>(
+    `SELECT COUNT(*)::int AS total,
+            COUNT(*) FILTER (WHERE completed_at IS NOT NULL)::int AS done
+       FROM session_sets WHERE session_exercise_id = $1`,
+    [sessionExercise.id]
+  );
+  const { total, done } = counts.rows[0]!;
+
+  if (input.series > total) {
+    const template = await client.query<{ rest_seconds: number | null; weight_kg: number | null }>(
+      `SELECT rest_seconds, weight_kg FROM session_sets
+        WHERE session_exercise_id = $1 ORDER BY position DESC LIMIT 1`,
+      [sessionExercise.id]
+    );
+    const rest = input.restSeconds !== undefined ? input.restSeconds : template.rows[0]?.rest_seconds ?? null;
+    for (let position = total; position < input.series; position++) {
+      await client.query(
+        `INSERT INTO session_sets
+           (session_exercise_id, position, target_reps_min, target_reps_max, rest_seconds, weight_kg)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          sessionExercise.id,
+          position,
+          input.targetRepsMin,
+          input.targetRepsMax ?? null,
+          rest,
+          template.rows[0]?.weight_kg ?? null,
+        ]
+      );
+    }
+    return;
+  }
+
+  // Nunca abaixo do que já foi feito: as concluídas ficam, mesmo que o plano encolha.
+  const toRemove = Math.min(total - input.series, total - done);
+  if (toRemove > 0) {
+    await client.query(
+      `DELETE FROM session_sets WHERE id IN (
+         SELECT id FROM session_sets
+          WHERE session_exercise_id = $1 AND completed_at IS NULL
+          ORDER BY position DESC LIMIT $2
+       )`,
+      [sessionExercise.id, toRemove]
+    );
+  }
+}
+
 export async function updateExercisePlan(
   splitId: string,
   splitExerciseId: string,
   input: UpdateExercisePlanInput
 ): Promise<Split | null> {
-  const existing = await pool.query(
-    "SELECT id FROM split_exercises WHERE id = $1 AND split_id = $2",
+  const existing = await pool.query<{ id: string; exercise_id: string }>(
+    "SELECT id, exercise_id FROM split_exercises WHERE id = $1 AND split_id = $2",
     [splitExerciseId, splitId]
   );
-  if (!existing.rows[0]) return null;
+  const splitExercise = existing.rows[0];
+  if (!splitExercise) return null;
 
   const client = await pool.connect();
   try {
@@ -235,6 +318,7 @@ export async function updateExercisePlan(
       );
     }
     await client.query("UPDATE workout_splits SET updated_at = NOW() WHERE id = $1", [splitId]);
+    await syncActiveSession(client, splitExercise.exercise_id, input);
     await client.query("COMMIT");
   } catch (error) {
     await rollback(client);

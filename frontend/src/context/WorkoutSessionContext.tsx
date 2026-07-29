@@ -7,7 +7,10 @@ import {
   type SessionSnapshot,
 } from "../utils/sessionMachine";
 import { apiErrorMessage } from "../utils/apiError";
+import { totalLoadKg } from "../utils/format";
+import { parseMaskedNumber } from "../utils/numberMask";
 import * as sessionService from "../services/sessionService";
+import * as exerciseService from "../services/exerciseService";
 import { useSettings } from "../hooks/useSettings";
 import { useAudioCue } from "../hooks/useAudioCue";
 import { useRestTimer } from "../hooks/useRestTimer";
@@ -166,6 +169,41 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
     dispatch({ type: "EXERCISE_REMOVED", exerciseId: sessionExerciseId });
   }, []);
 
+  /** Recarrega a sessão do servidor sem perder fase nem contagem de descanso. */
+  const refreshSession = useCallback(async () => {
+    const session = await sessionService.fetchActiveSession();
+    if (session) dispatch({ type: "SESSION_SYNCED", session });
+  }, []);
+
+  // Confirmação do descanso entre exercícios: grava a carga do exercício que terminou,
+  // propaga a nova carga total para as séries já feitas e avança.
+  const commitInterRest = useCallback(
+    async (workingMasked: string, additionalMasked: string) => {
+      const exercise = state.session?.exercises[state.currentExerciseIndex] ?? null;
+      if (exercise?.exerciseId != null) {
+        // Campo de carga vazio significa "não alterar", para um toque errado não apagar
+        // a carga do exercício; o adicional vazio significa "sem adicional".
+        const working = parseMaskedNumber(workingMasked) ?? exercise.workingWeightKg;
+        const additional = parseMaskedNumber(additionalMasked);
+        if (working !== exercise.workingWeightKg || additional !== exercise.additionalWeightKg) {
+          await exerciseService.updateExercise(exercise.exerciseId, {
+            workingWeightKg: working,
+            additionalWeightKg: additional,
+          });
+          const total = totalLoadKg(working, additional);
+          for (const set of exercise.sets) {
+            if (set.completedAt !== null && set.weightKg !== total) {
+              await sessionService.updateSessionSet(set.id, { weightKg: total });
+            }
+          }
+          await refreshSession();
+        }
+      }
+      dispatch({ type: "NEXT_EXERCISE" });
+    },
+    [state.session, state.currentExerciseIndex, refreshSession]
+  );
+
   const finish = useCallback(async () => {
     if (!state.session) throw new Error("Nenhum treino em andamento.");
     const response = await sessionService.finishSession(state.session.id);
@@ -195,6 +233,8 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
       nextExercise,
       editSet,
       removeExercise,
+      refreshSession,
+      commitInterRest,
       finish,
       discard,
     }),
@@ -213,6 +253,8 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
       nextExercise,
       editSet,
       removeExercise,
+      refreshSession,
+      commitInterRest,
       finish,
       discard,
     ]

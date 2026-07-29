@@ -9,6 +9,7 @@ const baseExercise = {
   imageFocalY: z.number().min(0).max(100).optional(),
   imageZoom: z.number().min(1).max(4).optional(),
   workingWeightKg: z.number().min(0).max(2000).nullish(),
+  additionalWeightKg: z.number().min(0).max(2000).nullish(),
   machineSetting: z.string().max(500).nullish(),
   notes: z.string().max(2000).nullish(),
   videoUrl: httpUrl("Link de vídeo inválido.").nullish(),
