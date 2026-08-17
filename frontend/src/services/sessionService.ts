@@ -70,6 +70,23 @@ export async function updateSessionSet(id: string, patch: SessionSetPatch): Prom
   return response.data;
 }
 
+/** Aplica o mesmo patch a todas as séries pendentes (ou concluídas) do exercício. */
+export async function updateSessionSets(
+  sessionExerciseId: string,
+  patch: {
+    scope: "pending" | "completed";
+    weightKg?: number | null;
+    reps?: number | null;
+    completed?: boolean;
+  }
+): Promise<SessionSet[]> {
+  const response = await api.put<SessionSet[]>(
+    `/api/session-exercises/${sessionExerciseId}/sets`,
+    patch
+  );
+  return response.data;
+}
+
 export async function deleteSessionSet(id: string): Promise<void> {
   await api.delete(`/api/session-sets/${id}`);
 }

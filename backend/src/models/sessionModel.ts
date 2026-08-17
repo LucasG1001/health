@@ -70,19 +70,19 @@ function toSession(row: SessionRow, exercises: SessionExercise[]): WorkoutSessio
 
 // split_exercise_id é resolvido pela divisão da sessão (não há coluna): é o que permite
 // editar o plano do exercício sem precisar carregar a divisão na tela de execução.
-const SPLIT_EXERCISE_SQL = `
-  (SELECT sx.id FROM split_exercises sx
-    WHERE sx.split_id = ws.split_id AND sx.exercise_id = se.exercise_id) AS split_exercise_id
+const SPLIT_EXERCISE_JOIN = `
+  LEFT JOIN split_exercises sx ON sx.split_id = ws.split_id AND sx.exercise_id = se.exercise_id
 `;
 
 const EXERCISES_SQL = `
   SELECT se.id, se.session_id, se.exercise_id, se.exercise_name, se.position, se.notes,
          e.muscle_group, e.equipment, e.image_path, e.image_url, e.machine_setting,
          e.working_weight_kg, e.additional_weight_kg,
-         ${SPLIT_EXERCISE_SQL}
+         sx.id AS split_exercise_id
     FROM session_exercises se
     JOIN workout_sessions ws ON ws.id = se.session_id
     LEFT JOIN exercises e ON e.id = se.exercise_id
+    ${SPLIT_EXERCISE_JOIN}
    WHERE se.session_id = $1
    ORDER BY se.position ASC
 `;
@@ -153,16 +153,26 @@ export async function list(filters: {
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   values.push(filters.limit);
 
+  // O LIMIT vem antes do LATERAL para as contagens rodarem só nas sessões devolvidas — e
+  // numa varredura só, em vez de duas subqueries correlacionadas por linha.
   const result = await pool.query<SummaryRow>(
-    `SELECT ws.*,
-            (SELECT COUNT(*)::int FROM session_exercises se WHERE se.session_id = ws.id) AS exercise_count,
-            (SELECT COUNT(*)::int FROM session_sets ss
-               JOIN session_exercises se ON se.id = ss.session_exercise_id
-              WHERE se.session_id = ws.id AND ss.completed_at IS NOT NULL) AS completed_sets
-       FROM workout_sessions ws
-       ${where}
-      ORDER BY ws.started_at DESC
-      LIMIT $${values.length}`,
+    `SELECT s.*,
+            COALESCE(agg.exercise_count, 0) AS exercise_count,
+            COALESCE(agg.completed_sets, 0) AS completed_sets
+       FROM (
+         SELECT ws.* FROM workout_sessions ws
+          ${where}
+          ORDER BY ws.started_at DESC
+          LIMIT $${values.length}
+       ) s
+       LEFT JOIN LATERAL (
+         SELECT COUNT(DISTINCT se.id)::int AS exercise_count,
+                COUNT(ss.id) FILTER (WHERE ss.completed_at IS NOT NULL)::int AS completed_sets
+           FROM session_exercises se
+           LEFT JOIN session_sets ss ON ss.session_exercise_id = se.id
+          WHERE se.session_id = s.id
+       ) agg ON TRUE
+      ORDER BY s.started_at DESC`,
     values
   );
 
@@ -239,35 +249,57 @@ export async function start(splitId: string): Promise<WorkoutSession> {
       bySplitExercise.set(row.split_exercise_id, group);
     }
 
-    for (const rows of bySplitExercise.values()) {
-      const head = rows[0]!;
-      const inserted = await client.query<{ id: string }>(
-        `INSERT INTO session_exercises (session_id, exercise_id, exercise_name, position)
-         VALUES ($1, $2, $3, $4)
-         RETURNING id`,
-        [sessionId, head.exercise_id, head.exercise_name, head.exercise_position]
-      );
-      const sessionExerciseId = inserted.rows[0]!.id;
+    // Dois inserts em lote, e não um por exercício e outro por série: iniciar um treino de
+    // 8 exercícios × 4 séries custava ~40 idas ao banco dentro da transação.
+    const heads = [...bySplitExercise.values()].map((rows) => rows[0]!);
+    const inserted = await client.query<{ id: string; exercise_id: string }>(
+      `INSERT INTO session_exercises (session_id, exercise_id, exercise_name, position)
+       SELECT $1::uuid, x.exercise_id, x.exercise_name, x.position
+         FROM unnest($2::uuid[], $3::text[], $4::int[]) AS x(exercise_id, exercise_name, position)
+       RETURNING id, exercise_id`,
+      [
+        sessionId,
+        heads.map((head) => head.exercise_id),
+        heads.map((head) => head.exercise_name),
+        heads.map((head) => head.exercise_position),
+      ]
+    );
+    const sessionExerciseByExercise = new Map(
+      inserted.rows.map((row) => [row.exercise_id, row.id] as const)
+    );
 
-      const plannedSets = rows.filter((row) => row.set_id !== null);
-      for (let i = 0; i < plannedSets.length; i++) {
-        const set = plannedSets[i]!;
-        await client.query(
-          // Séries planejadas não têm tipo nem carga própria: toda série materializada é
-          // de trabalho, com o descanso do exercício e a carga total do catálogo.
-          `INSERT INTO session_sets
-             (session_exercise_id, position, target_reps_min, target_reps_max, rest_seconds, weight_kg)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
-          [
-            sessionExerciseId,
-            i,
-            set.target_reps_min,
-            set.target_reps_max,
-            set.exercise_rest_seconds,
-            totalLoadKg(set.exercise_working_weight_kg, set.exercise_additional_weight_kg),
-          ]
-        );
-      }
+    const setExerciseIds: string[] = [];
+    const setPositions: number[] = [];
+    const setRepsMin: (number | null)[] = [];
+    const setRepsMax: (number | null)[] = [];
+    const setRest: (number | null)[] = [];
+    const setWeights: (number | null)[] = [];
+    for (const rows of bySplitExercise.values()) {
+      const sessionExerciseId = sessionExerciseByExercise.get(rows[0]!.exercise_id);
+      if (!sessionExerciseId) continue;
+      // Séries planejadas não têm tipo nem carga própria: toda série materializada é
+      // de trabalho, com o descanso do exercício e a carga total do catálogo.
+      rows
+        .filter((row) => row.set_id !== null)
+        .forEach((set, position) => {
+          setExerciseIds.push(sessionExerciseId);
+          setPositions.push(position);
+          setRepsMin.push(set.target_reps_min);
+          setRepsMax.push(set.target_reps_max);
+          setRest.push(set.exercise_rest_seconds);
+          setWeights.push(
+            totalLoadKg(set.exercise_working_weight_kg, set.exercise_additional_weight_kg)
+          );
+        });
+    }
+
+    if (setExerciseIds.length > 0) {
+      await client.query(
+        `INSERT INTO session_sets
+           (session_exercise_id, position, target_reps_min, target_reps_max, rest_seconds, weight_kg)
+         SELECT * FROM unnest($1::uuid[], $2::int[], $3::int[], $4::int[], $5::int[], $6::numeric[])`,
+        [setExerciseIds, setPositions, setRepsMin, setRepsMax, setRest, setWeights]
+      );
     }
 
     await client.query("COMMIT");
@@ -385,10 +417,11 @@ async function findExercise(sessionExerciseId: string): Promise<SessionExercise 
     `SELECT se.id, se.session_id, se.exercise_id, se.exercise_name, se.position, se.notes,
             e.muscle_group, e.equipment, e.image_path, e.image_url, e.machine_setting,
             e.working_weight_kg, e.additional_weight_kg,
-            ${SPLIT_EXERCISE_SQL}
+            sx.id AS split_exercise_id
        FROM session_exercises se
        JOIN workout_sessions ws ON ws.id = se.session_id
        LEFT JOIN exercises e ON e.id = se.exercise_id
+       ${SPLIT_EXERCISE_JOIN}
       WHERE se.id = $1`,
     [sessionExerciseId]
   );
@@ -445,7 +478,6 @@ const SET_COLUMN_MAP: Record<keyof Omit<SessionSetPatch, "completed">, string> =
 };
 
 export async function updateSet(id: string, patch: SessionSetPatch): Promise<SessionSet | null> {
-  await assertEditableBySet(id);
   const { completed, ...columns } = patch;
   const { sets, values, nextIndex } = buildUpdateSet(columns, SET_COLUMN_MAP);
 
@@ -456,16 +488,93 @@ export async function updateSet(id: string, patch: SessionSetPatch): Promise<Ses
   }
 
   if (sets.length === 0) {
+    await assertEditableBySet(id);
     const current = await pool.query<SessionSetRow>("SELECT * FROM session_sets WHERE id = $1", [id]);
     return current.rows[0] ? toSet(current.rows[0]) : null;
   }
 
   values.push(id);
+  // O status da sessão entra no próprio UPDATE: validar antes, em outra query, dobrava a
+  // latência de banco de cada série marcada (é a ação mais repetida do treino).
   const result = await pool.query<SessionSetRow>(
-    `UPDATE session_sets SET ${sets.join(", ")} WHERE id = $${nextIndex} RETURNING *`,
+    `UPDATE session_sets ss SET ${sets.join(", ")}
+       FROM session_exercises se
+       JOIN workout_sessions ws ON ws.id = se.session_id
+      WHERE ss.id = $${nextIndex}
+        AND se.id = ss.session_exercise_id
+        AND ws.status = 'in_progress'
+      RETURNING ss.*`,
     values
   );
-  return result.rows[0] ? toSet(result.rows[0]) : null;
+  if (result.rows[0]) return toSet(result.rows[0]);
+
+  // Nada atualizado: só aqui vale pagar a query extra para separar 404 de sessão concluída.
+  await assertEditableBySet(id);
+  return null;
+}
+
+export interface SessionSetsPatch {
+  /** "pending" preenche o que está vazio; "completed" sobrescreve o que já foi registrado. */
+  scope: "pending" | "completed";
+  completed?: boolean;
+  weightKg?: number | null;
+  reps?: number | null;
+}
+
+/**
+ * Aplica o mesmo patch a todas as séries pendentes (ou concluídas) do exercício em uma única
+ * query — concluir/reabrir um exercício antes custava um round-trip por série.
+ */
+export async function updateSets(
+  sessionExerciseId: string,
+  patch: SessionSetsPatch
+): Promise<SessionSet[] | null> {
+  const pending = patch.scope === "pending";
+  const sets: string[] = [];
+  const values: unknown[] = [];
+  let index = 1;
+
+  if (patch.weightKg !== undefined) {
+    sets.push(pending ? `weight_kg = COALESCE(weight_kg, $${index})` : `weight_kg = $${index}`);
+    values.push(patch.weightKg);
+    index++;
+  }
+  if (patch.reps !== undefined) {
+    // Pendente sem reps registradas vale o alvo da própria série; o valor recebido é o
+    // último recurso, para a série não somar zero no volume.
+    sets.push(pending ? `reps = COALESCE(reps, target_reps_min, $${index})` : `reps = $${index}`);
+    values.push(patch.reps);
+    index++;
+  }
+  if (patch.completed === true) {
+    sets.push("completed_at = COALESCE(completed_at, NOW())");
+  } else if (patch.completed === false) {
+    sets.push("completed_at = NULL");
+  }
+  if (sets.length === 0) return [];
+
+  values.push(sessionExerciseId);
+  const result = await pool.query<SessionSetRow>(
+    `UPDATE session_sets ss SET ${sets.join(", ")}
+       FROM session_exercises se
+       JOIN workout_sessions ws ON ws.id = se.session_id
+      WHERE ss.session_exercise_id = $${index}
+        AND se.id = ss.session_exercise_id
+        AND ws.status = 'in_progress'
+        AND ss.completed_at IS ${pending ? "NULL" : "NOT NULL"}
+      RETURNING ss.*`,
+    values
+  );
+  if (result.rows.length > 0) {
+    return result.rows.map(toSet).sort((a, b) => a.position - b.position);
+  }
+
+  await assertEditableByExercise(sessionExerciseId);
+  const exercise = await pool.query<{ id: string }>(
+    "SELECT id FROM session_exercises WHERE id = $1",
+    [sessionExerciseId]
+  );
+  return exercise.rows[0] ? [] : null;
 }
 
 export async function removeSet(id: string): Promise<boolean> {

@@ -15,6 +15,7 @@ import {
 import { MUSCLE_GROUP_LABELS } from "../../utils/format";
 import { parseYouTubeId } from "../../utils/youtube";
 import { apiErrorMessage } from "../../utils/apiError";
+import { compressImage } from "../../utils/imageCompress";
 import type { MuscleGroup } from "../../types/exercise";
 import styles from "./ExerciseFormPage.module.css";
 
@@ -71,11 +72,12 @@ export function ExerciseFormPage() {
   const previewRef = useRef<string | null>(null);
   const createdIdRef = useRef<string | null>(null);
 
-  const onPickImage = (file: File | null) => {
+  const onPickImage = async (file: File | null) => {
     if (!file) return;
-    setImageFile(file);
+    const reduced = await compressImage(file);
+    setImageFile(reduced);
     if (previewRef.current) URL.revokeObjectURL(previewRef.current);
-    const next = URL.createObjectURL(file);
+    const next = URL.createObjectURL(reduced);
     previewRef.current = next;
     setPreviewUrl(next);
     setFocalX(50);

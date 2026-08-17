@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NumericInput } from "../NumericInput/NumericInput";
-import { useWorkoutSession } from "../../context/workoutSessionStore";
+import { useRestCountdown, useWorkoutSession } from "../../context/workoutSessionStore";
 import { formatClock, formatKg, totalLoadKg } from "../../utils/format";
 import { numberToMask, parseMaskedNumber } from "../../utils/numberMask";
 import { apiErrorMessage } from "../../utils/apiError";
@@ -20,8 +20,22 @@ export function InterRestModal() {
   return <InterRestPanel key={exercise.id} exercise={exercise} />;
 }
 
+/** Só este bloco acompanha o tick do descanso; os campos do painel ficam de fora. */
+function RestTimerBlock() {
+  const { remainingMs, progress } = useRestCountdown();
+  return (
+    <div className={styles.timerBlock}>
+      <span className={styles.timer}>{formatClock(remainingMs)}</span>
+      <span className={styles.timerLabel}>Descanse antes do próximo</span>
+      <div className={styles.progressTrack}>
+        <div className={styles.progressFill} style={{ width: `${Math.round(progress * 100)}%` }} />
+      </div>
+    </div>
+  );
+}
+
 function InterRestPanel({ exercise }: { exercise: SessionExercise }) {
-  const { restRemainingMs, restProgress, extendRest, commitInterRest } = useWorkoutSession();
+  const { extendRest, commitInterRest } = useWorkoutSession();
   const currentReps = exercise.sets[0]?.targetRepsMin ?? null;
   const [working, setWorking] = useState(numberToMask(exercise.workingWeightKg));
   const [additional, setAdditional] = useState(numberToMask(exercise.additionalWeightKg));
@@ -51,13 +65,7 @@ function InterRestPanel({ exercise }: { exercise: SessionExercise }) {
 
   return (
     <div className={styles.panel} role="region" aria-label="Descanso entre exercícios">
-      <div className={styles.timerBlock}>
-        <span className={styles.timer}>{formatClock(restRemainingMs)}</span>
-        <span className={styles.timerLabel}>Descanse antes do próximo</span>
-        <div className={styles.progressTrack}>
-          <div className={styles.progressFill} style={{ width: `${Math.round(restProgress * 100)}%` }} />
-        </div>
-      </div>
+      <RestTimerBlock />
 
       <span className={styles.editLabel}>{exercise.exerciseName}</span>
 

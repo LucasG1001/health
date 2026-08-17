@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
 import {
   initialSessionState,
   sessionReducer,
@@ -17,10 +17,12 @@ import { useAudioCue } from "../hooks/useAudioCue";
 import { useRestTimer } from "../hooks/useRestTimer";
 import { useWakeLock } from "../hooks/useWakeLock";
 import {
+  RestTimerContext,
   WorkoutSessionContext,
   type InterRestInput,
   type WorkoutSessionContextValue,
 } from "./workoutSessionStore";
+import type { SessionExercise, SessionSet, WorkoutSession } from "../types/session";
 
 // v2: o snapshot perdeu o campo prepareCued; a chave nova evita ler o formato antigo.
 const SNAPSHOT_KEY = "health.activeSession.v2";
@@ -51,11 +53,44 @@ function readSnapshot(): SessionSnapshot | null {
   }
 }
 
+function findSet(session: WorkoutSession | null, setId: string): SessionSet | null {
+  if (!session) return null;
+  for (const exercise of session.exercises) {
+    const set = exercise.sets.find((item) => item.id === setId);
+    if (set) return set;
+  }
+  return null;
+}
+
+function findExercise(session: WorkoutSession | null, id: string): SessionExercise | null {
+  return session?.exercises.find((exercise) => exercise.id === id) ?? null;
+}
+
+type SetPatch = { weightKg?: number | null; reps?: number | null; rpe?: number | null; completed?: boolean };
+
+function applyPatch(set: SessionSet, patch: SetPatch): SessionSet {
+  return {
+    ...set,
+    ...(patch.weightKg !== undefined ? { weightKg: patch.weightKg } : null),
+    ...(patch.reps !== undefined ? { reps: patch.reps } : null),
+    ...(patch.rpe !== undefined ? { rpe: patch.rpe } : null),
+    ...(patch.completed === true ? { completedAt: set.completedAt ?? new Date().toISOString() } : null),
+    ...(patch.completed === false ? { completedAt: null } : null),
+  };
+}
+
 export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(sessionReducer, initialSessionState);
   const [hydrating, setHydrating] = useState(true);
   const [bootError, setBootError] = useState<string | null>(null);
   const { settings } = useSettings();
+
+  // As ações otimistas precisam da série anterior para desfazer a mudança se a rede falhar,
+  // sem que isso entre nas deps dos callbacks (recriá-los invalidaria a memoização da lista).
+  const stateRef = useRef(state);
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   useEffect(() => {
     const snapshot = readSnapshot();
@@ -105,9 +140,12 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
     dispatch({ type: "PLAY_EXERCISE", exerciseIndex });
   }, []);
 
+  // Marcar a série é otimista: o check aparece e o descanso começa no toque, não depois do
+  // round-trip (que em rede móvel atrasava a contagem em segundos). Se a API falhar, a série
+  // volta ao estado anterior e o reducer cancela o descanso.
   const completeSet = useCallback(
     async (input: {
-      setId: string;
+      set: SessionSet;
       weightKg: number | null;
       reps: number | null;
       rpe?: number | null;
@@ -115,20 +153,27 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
       restMs: number;
       interRestMs?: number;
     }) => {
-      const set = await sessionService.updateSessionSet(input.setId, {
+      const patch = {
         weightKg: input.weightKg,
         reps: input.reps,
         rpe: input.rpe ?? null,
         rir: input.rir ?? null,
-        completed: true,
-      });
+        completed: true as const,
+      };
       dispatch({
         type: "COMPLETE_SET",
-        set,
+        set: { ...applyPatch(input.set, patch), rir: patch.rir },
         restMs: input.restMs,
         interRestMs: input.interRestMs,
         now: Date.now(),
       });
+      try {
+        const set = await sessionService.updateSessionSet(input.set.id, patch);
+        dispatch({ type: "SETS_UPDATED", sets: [set] });
+      } catch (error) {
+        dispatch({ type: "SETS_UPDATED", sets: [input.set] });
+        throw error;
+      }
     },
     []
   );
@@ -158,16 +203,67 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
   });
   useWakeLock((settings?.wakeLockEnabled ?? true) && state.session?.status === "in_progress");
 
-  const editSet = useCallback(
-    async (
-      setId: string,
-      patch: { weightKg?: number | null; reps?: number | null; rpe?: number | null; completed?: boolean }
-    ) => {
+  const editSet = useCallback(async (setId: string, patch: SetPatch) => {
+    const previous = findSet(stateRef.current.session, setId);
+    if (previous) dispatch({ type: "SETS_UPDATED", sets: [applyPatch(previous, patch)] });
+    try {
       const set = await sessionService.updateSessionSet(setId, patch);
-      dispatch({ type: "SET_UPDATED", set });
+      dispatch({ type: "SETS_UPDATED", sets: [set] });
+    } catch (error) {
+      if (previous) dispatch({ type: "SETS_UPDATED", sets: [previous] });
+      throw error;
+    }
+  }, []);
+
+  // Concluir/reabrir um exercício inteiro é uma requisição só: antes era um PUT por série,
+  // em série, com a tela travada até o último.
+  const concludeExercise = useCallback(
+    async (sessionExerciseId: string, fallback: { weightKg: number | null; reps: number | null }) => {
+      const exercise = findExercise(stateRef.current.session, sessionExerciseId);
+      const pending = exercise?.sets.filter((set) => set.completedAt === null) ?? [];
+      if (pending.length === 0) return;
+      const completedAt = new Date().toISOString();
+      dispatch({
+        type: "SETS_UPDATED",
+        sets: pending.map((set) => ({
+          ...set,
+          weightKg: set.weightKg ?? fallback.weightKg,
+          reps: set.reps ?? set.targetRepsMin ?? fallback.reps,
+          completedAt,
+        })),
+      });
+      try {
+        const sets = await sessionService.updateSessionSets(sessionExerciseId, {
+          scope: "pending",
+          completed: true,
+          weightKg: fallback.weightKg,
+          reps: fallback.reps,
+        });
+        dispatch({ type: "SETS_UPDATED", sets });
+      } catch (error) {
+        dispatch({ type: "SETS_UPDATED", sets: pending });
+        throw error;
+      }
     },
     []
   );
+
+  const reopenExercise = useCallback(async (sessionExerciseId: string) => {
+    const exercise = findExercise(stateRef.current.session, sessionExerciseId);
+    const done = exercise?.sets.filter((set) => set.completedAt !== null) ?? [];
+    if (done.length === 0) return;
+    dispatch({ type: "SETS_UPDATED", sets: done.map((set) => ({ ...set, completedAt: null })) });
+    try {
+      const sets = await sessionService.updateSessionSets(sessionExerciseId, {
+        scope: "completed",
+        completed: false,
+      });
+      dispatch({ type: "SETS_UPDATED", sets });
+    } catch (error) {
+      dispatch({ type: "SETS_UPDATED", sets: done });
+      throw error;
+    }
+  }, []);
 
   const removeExercise = useCallback(async (sessionExerciseId: string) => {
     await sessionService.removeSessionExercise(sessionExerciseId);
@@ -188,7 +284,9 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
       const session = state.session;
       const exercise = session?.exercises[state.currentExerciseIndex] ?? null;
       if (session && exercise) {
-        let touched = false;
+        // Tudo em paralelo e sem recarregar a sessão depois: o painel encadeava uma
+        // requisição por série concluída mais um GET da sessão inteira.
+        const tasks: Promise<unknown>[] = [];
 
         // Campo vazio significa "não alterar", para um toque errado não apagar a carga;
         // o adicional vazio significa "sem adicional".
@@ -198,17 +296,29 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
           exercise.exerciseId != null &&
           (working !== exercise.workingWeightKg || additional !== exercise.additionalWeightKg)
         ) {
-          await exerciseService.updateExercise(exercise.exerciseId, {
+          const exerciseId = exercise.exerciseId;
+          const total = totalLoadKg(working, additional);
+          dispatch({
+            type: "EXERCISE_LOAD_UPDATED",
+            exerciseId,
             workingWeightKg: working,
             additionalWeightKg: additional,
           });
-          const total = totalLoadKg(working, additional);
-          for (const set of exercise.sets) {
-            if (set.completedAt !== null && set.weightKg !== total) {
-              await sessionService.updateSessionSet(set.id, { weightKg: total });
-            }
-          }
-          touched = true;
+          dispatch({
+            type: "SETS_UPDATED",
+            sets: exercise.sets
+              .filter((set) => set.completedAt !== null && set.weightKg !== total)
+              .map((set) => ({ ...set, weightKg: total })),
+          });
+          tasks.push(
+            exerciseService.updateExercise(exerciseId, {
+              workingWeightKg: working,
+              additionalWeightKg: additional,
+            }),
+            sessionService
+              .updateSessionSets(exercise.id, { scope: "completed", weightKg: total })
+              .then((sets) => dispatch({ type: "SETS_UPDATED", sets }))
+          );
         }
 
         // Reps mexem só no alvo: as séries já concluídas ficam com o que foi registrado
@@ -223,19 +333,42 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
           exercise.splitExerciseId !== null
         ) {
           const currentMax = exercise.sets[0]?.targetRepsMax ?? null;
-          await splitService.updateExercisePlan(session.splitId, exercise.splitExerciseId, {
+          // A faixa deixa de fazer sentido se o novo mínimo passa do máximo antigo.
+          const targetRepsMax = currentMax != null && currentMax >= reps ? currentMax : null;
+          dispatch({
+            type: "TARGET_REPS_UPDATED",
+            sessionExerciseId: exercise.id,
             targetRepsMin: reps,
-            // A faixa deixa de fazer sentido se o novo mínimo passa do máximo antigo.
-            targetRepsMax: currentMax != null && currentMax >= reps ? currentMax : null,
+            targetRepsMax,
           });
-          touched = true;
+          tasks.push(
+            splitService.updateExercisePlan(session.splitId, exercise.splitExerciseId, {
+              targetRepsMin: reps,
+              targetRepsMax,
+            })
+          );
         }
 
-        if (touched) await refreshSession();
+        if (tasks.length > 0) {
+          try {
+            await Promise.all(tasks);
+          } catch (error) {
+            dispatch({ type: "SETS_UPDATED", sets: exercise.sets });
+            if (exercise.exerciseId != null) {
+              dispatch({
+                type: "EXERCISE_LOAD_UPDATED",
+                exerciseId: exercise.exerciseId,
+                workingWeightKg: exercise.workingWeightKg,
+                additionalWeightKg: exercise.additionalWeightKg,
+              });
+            }
+            throw error;
+          }
+        }
       }
       dispatch({ type: "NEXT_EXERCISE" });
     },
-    [state.session, state.currentExerciseIndex, refreshSession]
+    [state.session, state.currentExerciseIndex]
   );
 
   const finish = useCallback(async () => {
@@ -256,8 +389,6 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
       state,
       hydrating,
       bootError,
-      restRemainingMs,
-      restProgress,
       unlock,
       start,
       playExercise,
@@ -266,6 +397,8 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
       extendRest,
       nextExercise,
       editSet,
+      concludeExercise,
+      reopenExercise,
       removeExercise,
       refreshSession,
       commitInterRest,
@@ -276,8 +409,6 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
       state,
       hydrating,
       bootError,
-      restRemainingMs,
-      restProgress,
       unlock,
       start,
       playExercise,
@@ -286,6 +417,8 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
       extendRest,
       nextExercise,
       editSet,
+      concludeExercise,
+      reopenExercise,
       removeExercise,
       refreshSession,
       commitInterRest,
@@ -294,5 +427,14 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
     ]
   );
 
-  return <WorkoutSessionContext.Provider value={value}>{children}</WorkoutSessionContext.Provider>;
+  const countdown = useMemo(
+    () => ({ remainingMs: restRemainingMs, progress: restProgress }),
+    [restRemainingMs, restProgress]
+  );
+
+  return (
+    <WorkoutSessionContext.Provider value={value}>
+      <RestTimerContext.Provider value={countdown}>{children}</RestTimerContext.Provider>
+    </WorkoutSessionContext.Provider>
+  );
 }

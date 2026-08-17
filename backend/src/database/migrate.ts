@@ -242,10 +242,6 @@ export async function migrate(): Promise<void> {
     );
   `);
 
-  await pool.query(`
-    CREATE INDEX IF NOT EXISTS session_sets_se_idx ON session_sets (session_exercise_id);
-  `);
-
   // Sobras de features removidas (ExerciseDB, PRs, gamificação) e de séries planejadas
   // que nunca chegaram a ser gravadas. Nada abaixo tem leitor no código.
   await pool.query(`DROP TABLE IF EXISTS user_badges;`);
@@ -268,4 +264,19 @@ export async function migrate(): Promise<void> {
 
   // Aquecimento planejado não existe, então este descanso nunca era aplicado.
   await pool.query(`ALTER TABLE settings DROP COLUMN IF EXISTS rest_warmup_seconds;`);
+
+  // FKs sem índice: apagar uma divisão ou um exercício varria a tabela filha inteira.
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS workout_sessions_split_idx ON workout_sessions (split_id);
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS split_exercises_exercise_idx ON split_exercises (exercise_id);
+  `);
+
+  // As séries são sempre lidas por exercício e em ordem de posição.
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS session_sets_se_position_idx
+      ON session_sets (session_exercise_id, position);
+  `);
+  await pool.query(`DROP INDEX IF EXISTS session_sets_se_idx;`);
 }

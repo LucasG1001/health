@@ -7,10 +7,13 @@ pg.types.setTypeParser(pg.types.builtins.DATE, (value) => value);
 pg.types.setTypeParser(pg.types.builtins.NUMERIC, (value) => parseFloat(value));
 pg.types.setTypeParser(pg.types.builtins.INT8, (value) => parseInt(value, 10));
 
+// idleTimeoutMillis: 0 porque o descanso entre séries passa de 30s — reciclar conexões ociosas
+// faria quase todo check pagar TCP + handshake SCRAM antes da primeira query.
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
   max: 10,
-  idleTimeoutMillis: 30_000,
+  idleTimeoutMillis: 0,
+  keepAlive: true,
   connectionTimeoutMillis: 5_000,
   statement_timeout: 15_000,
 });

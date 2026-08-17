@@ -18,7 +18,9 @@ interface UseRestTimerOptions {
 }
 
 export function useRestTimer({ endsAt, totalMs, onTick, onEnd }: UseRestTimerOptions) {
-  const now = useNow(endsAt !== null, TICK_MS);
+  // O tick para no fim do descanso: na fase entre exercícios o painel segue aberto com o
+  // relógio em zero, e antes disso a árvore continuava re-renderizando 4×/s.
+  const now = useNow(endsAt !== null, TICK_MS, endsAt);
   const callbacksRef = useRef({ onTick, onEnd });
 
   useEffect(() => {

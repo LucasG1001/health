@@ -397,4 +397,70 @@ describe("sessionReducer", () => {
     expect(state.phase).toBe("exercising");
     expect(state.currentExerciseIndex).toBe(0);
   });
+
+  it("SETS_UPDATED conclui o exercício inteiro de uma vez", () => {
+    let state = startedState();
+    state = sessionReducer(state, {
+      type: "SETS_UPDATED",
+      sets: [makeSet("set-1", true), makeSet("set-2", true)],
+    });
+    expect(state.phase).toBe("exerciseDone");
+    expect(state.session!.exercises[0]!.sets.every((set) => set.completedAt !== null)).toBe(true);
+  });
+
+  it("SETS_UPDATED desfazendo a série do descanso cancela a contagem", () => {
+    let state = startedState();
+    state = sessionReducer(state, {
+      type: "COMPLETE_SET",
+      set: makeSet("set-1", true),
+      restMs: 60000,
+      now: 1_000,
+    });
+    expect(state.phase).toBe("resting");
+    // Rollback de um check otimista que falhou na rede.
+    state = sessionReducer(state, { type: "SETS_UPDATED", sets: [makeSet("set-1")] });
+    expect(state.phase).toBe("exercising");
+    expect(state.restEndsAt).toBeNull();
+    expect(state.currentSetIndex).toBe(0);
+  });
+
+  it("SETS_UPDATED preserva a identidade dos exercícios não afetados", () => {
+    const state = startedState();
+    const before = state.session!.exercises[1]!;
+    const next = sessionReducer(state, { type: "SETS_UPDATED", sets: [makeSet("set-1", true)] });
+    expect(next.session!.exercises[1]).toBe(before);
+    expect(next.session!.exercises[0]).not.toBe(state.session!.exercises[0]);
+  });
+
+  it("SETS_UPDATED com lista vazia não altera o estado", () => {
+    const state = startedState();
+    expect(sessionReducer(state, { type: "SETS_UPDATED", sets: [] })).toBe(state);
+  });
+
+  it("EXERCISE_LOAD_UPDATED troca a carga do exercício do catálogo", () => {
+    let state = startedState();
+    state = sessionReducer(state, {
+      type: "EXERCISE_LOAD_UPDATED",
+      exerciseId: "ex-1",
+      workingWeightKg: 50,
+      additionalWeightKg: 2.5,
+    });
+    expect(state.session!.exercises[0]!.workingWeightKg).toBe(50);
+    expect(state.session!.exercises[0]!.additionalWeightKg).toBe(2.5);
+    expect(state.session!.exercises[1]!.workingWeightKg).toBe(40);
+  });
+
+  it("TARGET_REPS_UPDATED muda só o alvo das séries pendentes", () => {
+    let state = startedState();
+    state = sessionReducer(state, { type: "SETS_UPDATED", sets: [makeSet("set-1", true)] });
+    state = sessionReducer(state, {
+      type: "TARGET_REPS_UPDATED",
+      sessionExerciseId: "se-1",
+      targetRepsMin: 8,
+      targetRepsMax: null,
+    });
+    const sets = state.session!.exercises[0]!.sets;
+    expect(sets[0]!.targetRepsMin).toBe(12);
+    expect(sets[1]!.targetRepsMin).toBe(8);
+  });
 });

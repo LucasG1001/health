@@ -18,6 +18,11 @@
   margin-left: var(--sidebar-collapsed);
 }
 
+.suspense {
+  padding: var(--spacing-lg);
+  color: var(--color-text-secondary);
+}
+
 .notFoundLink {
   display: inline-flex;
   padding: var(--spacing-md) var(--spacing-lg);

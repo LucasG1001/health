@@ -32,11 +32,24 @@ export type SessionAction =
   | { type: "NEXT_EXERCISE" }
   | { type: "BACK_TO_OVERVIEW" }
   | { type: "SET_UPDATED"; set: SessionSet }
+  | { type: "SETS_UPDATED"; sets: SessionSet[] }
   | { type: "SET_ADDED"; exerciseId: string; set: SessionSet }
   | { type: "SET_REMOVED"; setId: string }
   | { type: "EXERCISE_ADDED"; exercise: SessionExercise }
   | { type: "EXERCISE_REMOVED"; exerciseId: string }
   | { type: "MACHINE_SETTING_UPDATED"; exerciseId: string; machineSetting: string | null }
+  | {
+      type: "EXERCISE_LOAD_UPDATED";
+      exerciseId: string;
+      workingWeightKg: number | null;
+      additionalWeightKg: number | null;
+    }
+  | {
+      type: "TARGET_REPS_UPDATED";
+      sessionExerciseId: string;
+      targetRepsMin: number | null;
+      targetRepsMax: number | null;
+    }
   | { type: "NOTES_UPDATED"; notes: string | null }
   | { type: "CLEAR" };
 
@@ -106,6 +119,21 @@ export function sessionVolumeKg(session: WorkoutSession): number {
 function withSession(state: SessionState, session: WorkoutSession): SessionState {
   const exercise = session.exercises[state.currentExerciseIndex];
   if (!exercise) return { ...state, session };
+  // O descanso pressupõe a série concluída: se ela voltou a pendente (rollback de uma
+  // falha de rede, ou reabertura manual), a contagem tem de parar junto.
+  if (
+    (state.phase === "resting" || state.phase === "interRest") &&
+    exercise.sets[state.currentSetIndex]?.completedAt == null
+  ) {
+    return {
+      ...state,
+      session,
+      phase: "exercising",
+      currentSetIndex: firstPendingSetIndex(exercise),
+      restEndsAt: null,
+      restTotalMs: null,
+    };
+  }
   if (state.phase === "exercising" && !hasPendingSets(exercise)) {
     return { ...state, session, phase: "exerciseDone", restEndsAt: null, restTotalMs: null };
   }
@@ -115,14 +143,22 @@ function withSession(state: SessionState, session: WorkoutSession): SessionState
   return { ...state, session };
 }
 
+// Só o exercício afetado é recriado: os demais mantêm identidade, o que permite memoizar
+// as linhas da lista (a tela re-renderiza a cada tick do descanso).
+function replaceSets(session: WorkoutSession, updated: SessionSet[]): WorkoutSession {
+  if (updated.length === 0) return session;
+  const byId = new Map(updated.map((set) => [set.id, set]));
+  let changed = false;
+  const exercises = session.exercises.map((exercise) => {
+    if (!exercise.sets.some((set) => byId.has(set.id))) return exercise;
+    changed = true;
+    return { ...exercise, sets: exercise.sets.map((set) => byId.get(set.id) ?? set) };
+  });
+  return changed ? { ...session, exercises } : session;
+}
+
 function replaceSet(session: WorkoutSession, updated: SessionSet): WorkoutSession {
-  return {
-    ...session,
-    exercises: session.exercises.map((exercise) => ({
-      ...exercise,
-      sets: exercise.sets.map((set) => (set.id === updated.id ? updated : set)),
-    })),
-  };
+  return replaceSets(session, [updated]);
 }
 
 export function sessionReducer(state: SessionState, action: SessionAction): SessionState {
@@ -263,6 +299,13 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
       return withSession(state, replaceSet(state.session, action.set));
     }
 
+    // Um exercício inteiro concluído/reaberto de uma vez — e também o rollback de uma
+    // atualização otimista que falhou.
+    case "SETS_UPDATED": {
+      if (!state.session || action.sets.length === 0) return state;
+      return withSession(state, replaceSets(state.session, action.sets));
+    }
+
     case "SET_ADDED": {
       if (!state.session) return state;
       return withSession(state, {
@@ -322,6 +365,55 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
           exercises: state.session.exercises.map((exercise) =>
             exercise.exerciseId === action.exerciseId
               ? { ...exercise, machineSetting: action.machineSetting }
+              : exercise
+          ),
+        },
+      };
+    }
+
+    // Carga do catálogo alterada no painel de descanso: a linha da sessão mostra a carga
+    // nova sem precisar recarregar a sessão inteira do servidor.
+    case "EXERCISE_LOAD_UPDATED": {
+      if (!state.session) return state;
+      return {
+        ...state,
+        session: {
+          ...state.session,
+          exercises: state.session.exercises.map((exercise) =>
+            exercise.exerciseId === action.exerciseId
+              ? {
+                  ...exercise,
+                  workingWeightKg: action.workingWeightKg,
+                  additionalWeightKg: action.additionalWeightKg,
+                }
+              : exercise
+          ),
+        },
+      };
+    }
+
+    // Espelha o que o servidor faz ao editar o plano: só as séries pendentes mudam de alvo,
+    // as concluídas são histórico.
+    case "TARGET_REPS_UPDATED": {
+      if (!state.session) return state;
+      return {
+        ...state,
+        session: {
+          ...state.session,
+          exercises: state.session.exercises.map((exercise) =>
+            exercise.id === action.sessionExerciseId
+              ? {
+                  ...exercise,
+                  sets: exercise.sets.map((set) =>
+                    set.completedAt === null
+                      ? {
+                          ...set,
+                          targetRepsMin: action.targetRepsMin,
+                          targetRepsMax: action.targetRepsMax,
+                        }
+                      : set
+                  ),
+                }
               : exercise
           ),
         },

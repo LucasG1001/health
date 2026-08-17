@@ -32,8 +32,21 @@ export const updateSessionSetSchema = z.object({
   completed: z.boolean().optional(),
 });
 
+export const updateSessionSetsSchema = z
+  .object({
+    scope: z.enum(["pending", "completed"], "Escopo inválido."),
+    weightKg: z.number().min(0).max(2000).nullish(),
+    reps: z.number().int().min(0).max(500).nullish(),
+    completed: z.boolean().optional(),
+  })
+  .refine(
+    (body) => body.weightKg !== undefined || body.reps !== undefined || body.completed !== undefined,
+    "Informe ao menos um campo para atualizar."
+  );
+
 export type StartSessionBody = z.infer<typeof startSessionSchema>;
 export type UpdateSessionBody = z.infer<typeof updateSessionSchema>;
 export type AddSessionExerciseBody = z.infer<typeof addSessionExerciseSchema>;
 export type AddSessionSetBody = z.infer<typeof addSessionSetSchema>;
 export type UpdateSessionSetBody = z.infer<typeof updateSessionSetSchema>;
+export type UpdateSessionSetsBody = z.infer<typeof updateSessionSetsSchema>;

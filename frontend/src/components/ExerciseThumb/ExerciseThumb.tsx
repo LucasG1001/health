@@ -16,10 +16,19 @@ interface ExerciseThumbProps {
 }
 
 export function ExerciseThumb({ exercise, size = "md" }: ExerciseThumbProps) {
+  const edge = size === "sm" ? 48 : 64;
   return (
     <div className={`${styles.thumb} ${size === "sm" ? styles.sm : styles.md}`}>
       {exercise.imageUrl ? (
-        <img src={exercise.imageUrl} alt="" loading="lazy" style={imageFocalStyle(exercise)} />
+        <img
+          src={exercise.imageUrl}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          width={edge}
+          height={edge}
+          style={imageFocalStyle(exercise)}
+        />
       ) : (
         <DumbbellIcon className={styles.icon} />
       )}

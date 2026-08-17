@@ -172,24 +172,46 @@ export async function replaceExercises(
     await client.query("BEGIN");
     await client.query("DELETE FROM split_exercises WHERE split_id = $1", [splitId]);
 
-    for (let i = 0; i < exercises.length; i++) {
-      const exercise = exercises[i]!;
-      const inserted = await client.query<{ id: string }>(
+    // Dois inserts em lote em vez de um por exercício e um por série planejada: salvar a
+    // divisão (reordenar, adicionar exercício) fazia dezenas de idas ao banco.
+    if (exercises.length > 0) {
+      const inserted = await client.query<{ id: string; position: number }>(
         // A carga vive só no catálogo (exercises.working_weight_kg), que é a única lida.
         `INSERT INTO split_exercises (split_id, exercise_id, position, rest_seconds, notes)
-         VALUES ($1, $2, $3, $4, $5)
-         RETURNING id`,
-        [splitId, exercise.exerciseId, i, exercise.restSeconds ?? null, exercise.notes ?? null]
+         SELECT $1::uuid, x.exercise_id, x.position, x.rest_seconds, x.notes
+           FROM unnest($2::uuid[], $3::int[], $4::int[], $5::text[])
+             AS x(exercise_id, position, rest_seconds, notes)
+         RETURNING id, position`,
+        [
+          splitId,
+          exercises.map((exercise) => exercise.exerciseId),
+          exercises.map((_, index) => index),
+          exercises.map((exercise) => exercise.restSeconds ?? null),
+          exercises.map((exercise) => exercise.notes ?? null),
+        ]
       );
-      const splitExerciseId = inserted.rows[0]!.id;
+      const idByPosition = new Map(inserted.rows.map((row) => [row.position, row.id] as const));
 
-      for (let j = 0; j < exercise.plannedSets.length; j++) {
-        const set = exercise.plannedSets[j]!;
+      const setExerciseIds: string[] = [];
+      const setPositions: number[] = [];
+      const setRepsMin: number[] = [];
+      const setRepsMax: (number | null)[] = [];
+      exercises.forEach((exercise, index) => {
+        const splitExerciseId = idByPosition.get(index);
+        if (!splitExerciseId) return;
+        exercise.plannedSets.forEach((set, position) => {
+          setExerciseIds.push(splitExerciseId);
+          setPositions.push(position);
+          setRepsMin.push(set.targetRepsMin);
+          setRepsMax.push(set.targetRepsMax ?? null);
+        });
+      });
+
+      if (setExerciseIds.length > 0) {
         await client.query(
-          `INSERT INTO planned_sets
-             (split_exercise_id, position, target_reps_min, target_reps_max)
-           VALUES ($1, $2, $3, $4)`,
-          [splitExerciseId, j, set.targetRepsMin, set.targetRepsMax ?? null]
+          `INSERT INTO planned_sets (split_exercise_id, position, target_reps_min, target_reps_max)
+           SELECT * FROM unnest($1::uuid[], $2::int[], $3::int[], $4::int[])`,
+          [setExerciseIds, setPositions, setRepsMin, setRepsMax]
         );
       }
     }
@@ -256,21 +278,21 @@ async function syncActiveSession(
       [sessionExercise.id]
     );
     const rest = input.restSeconds !== undefined ? input.restSeconds : template.rows[0]?.rest_seconds ?? null;
-    for (let position = total; position < input.series; position++) {
-      await client.query(
-        `INSERT INTO session_sets
-           (session_exercise_id, position, target_reps_min, target_reps_max, rest_seconds, weight_kg)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [
-          sessionExercise.id,
-          position,
-          input.targetRepsMin,
-          input.targetRepsMax ?? null,
-          rest,
-          template.rows[0]?.weight_kg ?? null,
-        ]
-      );
-    }
+    await client.query(
+      `INSERT INTO session_sets
+         (session_exercise_id, position, target_reps_min, target_reps_max, rest_seconds, weight_kg)
+       SELECT $1::uuid, position, $4, $5, $6, $7
+         FROM generate_series($2, $3 - 1) AS position`,
+      [
+        sessionExercise.id,
+        total,
+        input.series,
+        input.targetRepsMin,
+        input.targetRepsMax ?? null,
+        rest,
+        template.rows[0]?.weight_kg ?? null,
+      ]
+    );
     return;
   }
 
@@ -320,13 +342,11 @@ export async function updateExercisePlan(
       );
     } else {
       await client.query("DELETE FROM planned_sets WHERE split_exercise_id = $1", [splitExerciseId]);
-      for (let position = 0; position < input.series; position++) {
-        await client.query(
-          `INSERT INTO planned_sets (split_exercise_id, position, target_reps_min, target_reps_max)
-           VALUES ($1, $2, $3, $4)`,
-          [splitExerciseId, position, input.targetRepsMin, input.targetRepsMax ?? null]
-        );
-      }
+      await client.query(
+        `INSERT INTO planned_sets (split_exercise_id, position, target_reps_min, target_reps_max)
+         SELECT $1::uuid, position, $3, $4 FROM generate_series(0, $2 - 1) AS position`,
+        [splitExerciseId, input.series, input.targetRepsMin, input.targetRepsMax ?? null]
+      );
     }
     await client.query("UPDATE workout_splits SET updated_at = NOW() WHERE id = $1", [splitId]);
     await syncActiveSession(client, splitExercise.exercise_id, input);

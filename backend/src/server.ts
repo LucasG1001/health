@@ -5,6 +5,7 @@ import path from "path";
 import { existsSync } from "fs";
 import { fileURLToPath } from "url";
 import express from "express";
+import compression from "compression";
 import cors from "cors";
 import { migrate } from "./database/migrate.js";
 import { pool } from "./database/connection.js";
@@ -25,6 +26,9 @@ import { uploadErrorHandler } from "./middleware/uploadErrorHandler.js";
 const app = express();
 const PORT = process.env.PORT || 3333;
 
+// O Caddy da VPS é configurado só pelas labels do compose, sem `encode`: sem isto o
+// bundle e as respostas da API vão pela rede sem compressão.
+app.use(compression());
 app.use(cors());
 app.use(express.json());
 
@@ -48,6 +52,12 @@ app.use("/uploads", express.static(UPLOAD_DIR, { maxAge: "365d", immutable: true
 
 const clientDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../public");
 if (existsSync(clientDir)) {
+  // Só /assets tem nome hasheado pelo Vite e pode ser cacheado para sempre; o resto
+  // (index.html, manifest, ícones) continua revalidando a cada carregamento.
+  app.use(
+    "/assets",
+    express.static(path.join(clientDir, "assets"), { maxAge: "365d", immutable: true })
+  );
   app.use(express.static(clientDir));
   app.use((req, res, next) => {
     if (req.method !== "GET" || req.path.startsWith("/api/") || req.path.startsWith("/uploads/")) {

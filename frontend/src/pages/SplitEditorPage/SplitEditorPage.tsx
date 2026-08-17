@@ -17,21 +17,21 @@ import {
   StopIcon,
   TrashIcon,
 } from "../../components/Icon/icons";
-import { useExercises } from "../../hooks/useExercises";
+import { fetchExercises } from "../../services/exerciseService";
 import { useWorkoutSession } from "../../context/workoutSessionStore";
-import { useNow } from "../../hooks/useNow";
 import { completedSetsOf, firstPendingSetIndex, hasPendingSets } from "../../utils/sessionMachine";
 import { createSplit, fetchSplit, replaceSplitExercises, updateSplit } from "../../services/splitService";
+import { RestClock, RestStepper, SessionClock } from "./SessionTickers";
 import {
   MUSCLE_GROUP_LABELS,
   formatClock,
   formatLoad,
-  formatStopwatch,
   muscleSummary,
   repsTarget,
   totalLoadKg,
 } from "../../utils/format";
 import { apiErrorMessage } from "../../utils/apiError";
+import type { Exercise } from "../../types/exercise";
 import type { Split, SplitExercise, SplitExerciseInput } from "../../types/split";
 import type { SessionExercise, SessionSet } from "../../types/session";
 import styles from "./SplitEditorPage.module.css";
@@ -59,25 +59,25 @@ function toInput(exercise: SplitExercise): SplitExerciseInput {
 export function SplitEditorPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { exercises: catalog } = useExercises();
+  // O catálogo só alimenta o seletor de exercícios: carregá-lo na montagem trazia todas as
+  // imagens do acervo junto com a tela de execução, que não usa nenhuma delas.
+  const [catalog, setCatalog] = useState<Exercise[]>([]);
   const {
     state,
     hydrating,
     bootError,
-    restRemainingMs,
-    restProgress,
     unlock,
     start,
     playExercise,
     completeSet,
     skipRest,
     finish,
-    editSet,
+    concludeExercise,
+    reopenExercise,
   } = useWorkoutSession();
 
   const session = state.session;
   const inProgress = session !== null && session.status === "in_progress" && session.splitId === id;
-  const now = useNow(inProgress);
 
   const [split, setSplit] = useState<Split | null>(null);
   const [loading, setLoading] = useState(Boolean(id));
@@ -112,6 +112,21 @@ export function SplitEditorPage() {
       active = false;
     };
   }, [id]);
+
+  useEffect(() => {
+    if (!pickerOpen) return;
+    let active = true;
+    fetchExercises()
+      .then((data) => {
+        if (active) setCatalog(data);
+      })
+      .catch((err) => {
+        if (active) setError(apiErrorMessage(err, "Não foi possível carregar os exercícios."));
+      });
+    return () => {
+      active = false;
+    };
+  }, [pickerOpen]);
 
   const pickerResults = useMemo(() => {
     const chosen = new Set(split?.exercises.map((exercise) => exercise.exerciseId));
@@ -267,11 +282,17 @@ export function SplitEditorPage() {
   const defaultRestSeconds = (exercise: SplitExercise): number =>
     exercise.restSeconds ?? DEFAULT_REST_WORKING;
 
-  const sessionExerciseFor = (exercise: SplitExercise): { sx: SessionExercise; index: number } | null => {
-    if (!inProgress || !session) return null;
-    const index = session.exercises.findIndex((e) => e.exerciseId === exercise.exerciseId);
-    return index >= 0 ? { sx: session.exercises[index]!, index } : null;
-  };
+  // Um índice por render em vez de um findIndex por exercício em cada uma das três
+  // varreduras da lista (ordenação, linha e handlers).
+  const sessionIndex = new Map<string, { sx: SessionExercise; index: number }>();
+  if (inProgress && session) {
+    session.exercises.forEach((sx, index) => {
+      if (sx.exerciseId !== null) sessionIndex.set(sx.exerciseId, { sx, index });
+    });
+  }
+
+  const sessionExerciseFor = (exercise: SplitExercise): { sx: SessionExercise; index: number } | null =>
+    sessionIndex.get(exercise.exerciseId) ?? null;
 
   // `busy` é estado (render), então não protege dois toques no mesmo tick; o ref é a trava real.
   const runExclusive = async (action: () => Promise<void>) => {
@@ -302,7 +323,7 @@ export function SplitEditorPage() {
         if (!hasPendingSets(sx)) return;
         const pending = sx.sets[firstPendingSetIndex(sx)]!;
         await completeSet({
-          setId: pending.id,
+          set: pending,
           weightKg: pending.weightKg ?? totalLoadKg(sx.workingWeightKg, sx.additionalWeightKg),
           reps: pending.reps ?? pending.targetRepsMin ?? 1,
           restMs: restMsFor(pending),
@@ -317,18 +338,13 @@ export function SplitEditorPage() {
     runExclusive(async () => {
       const match = sessionExerciseFor(exercise);
       if (!match) return;
-      const pending = match.sx.sets.filter((s) => s.completedAt === null);
-      if (pending.length === 0) return;
       setError(null);
       try {
-        for (const set of pending) {
-          // Sem peso e reps a série conta como feita mas soma zero no volume do treino.
-          await editSet(set.id, {
-            completed: true,
-            weightKg: set.weightKg ?? totalLoadKg(match.sx.workingWeightKg, match.sx.additionalWeightKg),
-            reps: set.reps ?? set.targetRepsMin ?? 1,
-          });
-        }
+        // Sem peso e reps a série conta como feita mas soma zero no volume do treino.
+        await concludeExercise(match.sx.id, {
+          weightKg: totalLoadKg(match.sx.workingWeightKg, match.sx.additionalWeightKg),
+          reps: match.sx.sets.find((set) => set.completedAt === null)?.targetRepsMin ?? 1,
+        });
       } catch (err) {
         setError(apiErrorMessage(err, "Não foi possível concluir o exercício."));
       }
@@ -338,13 +354,9 @@ export function SplitEditorPage() {
     runExclusive(async () => {
       const match = sessionExerciseFor(exercise);
       if (!match) return;
-      const done = match.sx.sets.filter((s) => s.completedAt !== null);
-      if (done.length === 0) return;
       setError(null);
       try {
-        for (const set of done) {
-          await editSet(set.id, { completed: false });
-        }
+        await reopenExercise(match.sx.id);
       } catch (err) {
         setError(apiErrorMessage(err, "Não foi possível reabrir o exercício."));
       }
@@ -393,7 +405,6 @@ export function SplitEditorPage() {
     ? [...baseList.filter((e) => !isExerciseDone(e)), ...baseList.filter(isExerciseDone)]
     : baseList;
   const muscles = split ? muscleSummary(split.exercises) : "";
-  const elapsedMs = inProgress && session ? now - new Date(session.startedAt).getTime() : 0;
 
   return (
     <div className={styles.page}>
@@ -401,7 +412,11 @@ export function SplitEditorPage() {
         <button type="button" className={styles.iconBtn} onClick={() => navigate("/treino")} aria-label="Voltar">
           <ChevronLeftIcon className={styles.navIcon} />
         </button>
-        <span className={styles.clock}>{inProgress ? formatStopwatch(elapsedMs) : ""}</span>
+        {inProgress && session ? (
+          <SessionClock startedAt={session.startedAt} className={styles.clock} />
+        ) : (
+          <span className={styles.clock} />
+        )}
         {!inProgress && split ? (
           <button type="button" className={styles.editButton} onClick={openEditInfo}>
             Editar
@@ -442,9 +457,6 @@ export function SplitEditorPage() {
                 const done = sx ? !hasPendingSets(sx) : false;
                 const isActive = match !== null && match.index === state.currentExerciseIndex;
                 const restingHere = isActive && state.phase === "resting";
-                const timeLabel = restingHere
-                  ? formatClock(restRemainingMs)
-                  : formatClock(defaultRestSeconds(exercise) * 1000);
                 return (
                   <div
                     key={exercise.id}
@@ -509,7 +521,13 @@ export function SplitEditorPage() {
                       </div>
                     ) : (
                       <div className={styles.restLine}>
-                        <span className={styles.restTime}>{timeLabel}</span>
+                        {restingHere ? (
+                          <RestClock className={styles.restTime} />
+                        ) : (
+                          <span className={styles.restTime}>
+                            {formatClock(defaultRestSeconds(exercise) * 1000)}
+                          </span>
+                        )}
                         <span className={styles.restLabel}>(Descanso entre séries)</span>
                         {restingHere ? (
                           <button
@@ -538,11 +556,11 @@ export function SplitEditorPage() {
 
                     {isActive && total > 0 && (
                       <div className={styles.stepperWrap}>
-                        <SetStepper
-                          total={total}
-                          completed={completed}
-                          restProgress={restingHere ? restProgress : null}
-                        />
+                        {restingHere ? (
+                          <RestStepper total={total} completed={completed} />
+                        ) : (
+                          <SetStepper total={total} completed={completed} restProgress={null} />
+                        )}
                       </div>
                     )}
                   </div>

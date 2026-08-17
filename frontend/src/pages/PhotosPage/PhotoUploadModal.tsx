@@ -4,6 +4,7 @@ import { Modal } from "../../components/Modal/Modal";
 import { PoseSelector } from "../../components/PoseSelector/PoseSelector";
 import { uploadPhoto } from "../../services/photoService";
 import { apiErrorMessage } from "../../utils/apiError";
+import { compressImage } from "../../utils/imageCompress";
 import { todayIso } from "../../utils/dateUtils";
 import type { PhotoPose } from "../../types/photo";
 import styles from "./PhotoUploadModal.module.css";
@@ -26,10 +27,11 @@ export function PhotoUploadModal() {
 
   const previewRef = useRef<string | null>(null);
 
-  const handleFile = (selected: File | null) => {
-    setFile(selected);
+  const handleFile = async (selected: File | null) => {
+    const reduced = selected ? await compressImage(selected) : null;
+    setFile(reduced);
     if (previewRef.current) URL.revokeObjectURL(previewRef.current);
-    const next = selected ? URL.createObjectURL(selected) : null;
+    const next = reduced ? URL.createObjectURL(reduced) : null;
     previewRef.current = next;
     setPreview(next);
   };

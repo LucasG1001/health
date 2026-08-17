@@ -6,6 +6,7 @@ import {
   startSessionSchema,
   updateSessionSchema,
   updateSessionSetSchema,
+  updateSessionSetsSchema,
 } from "../schemas/session.js";
 import * as sessionModel from "../models/sessionModel.js";
 import { finishSession } from "../services/sessionFinishService.js";
@@ -138,6 +139,20 @@ export const updateSet = asyncHandler("Erro ao atualizar a série.", async (req,
     return;
   }
   res.json(set);
+});
+
+export const updateSets = asyncHandler("Erro ao atualizar as séries.", async (req, res) => {
+  const parsed = updateSessionSetsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    respondValidationError(res, parsed.error);
+    return;
+  }
+  const sets = await sessionModel.updateSets(String(req.params.id), parsed.data);
+  if (!sets) {
+    res.status(404).json({ error: "Exercício do treino não encontrado." });
+    return;
+  }
+  res.json(sets);
 });
 
 export const removeSet = asyncHandler("Erro ao remover a série.", async (req, res) => {
