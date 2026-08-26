@@ -9,8 +9,6 @@ import {
   remove,
   uploadImage,
   removeImage,
-  getLastPerformance,
-  getHistory,
 } from "../controllers/exerciseController.js";
 
 const router = Router();
@@ -24,7 +22,5 @@ router.put("/:id", withId, update);
 router.delete("/:id", withId, remove);
 router.post("/:id/image", withId, uploader.single("file"), uploadImage);
 router.delete("/:id/image", withId, removeImage);
-router.get("/:id/last-performance", withId, getLastPerformance);
-router.get("/:id/history", withId, getHistory);
 
 export { router as exerciseRoutes };

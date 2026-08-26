@@ -1,0 +1,215 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-base) var(--spacing-base);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast),
+    opacity var(--transition-fast);
+}
+
+.cardDone {
+  border-color: var(--color-success-border);
+  background: linear-gradient(180deg, var(--color-success-subtle), transparent 60%),
+    var(--color-bg-secondary);
+}
+
+.cardDragging {
+  border-color: var(--color-accent);
+  box-shadow: var(--shadow-glow);
+  opacity: 0.9;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.body {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-base);
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+
+.info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.name {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.25;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.muscle {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.chevron {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--color-text-tertiary);
+}
+
+.remove {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  color: var(--color-text-tertiary);
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.remove:hover {
+  color: var(--color-error);
+  background: var(--color-error-subtle);
+}
+
+.removeIcon {
+  width: 17px;
+  height: 17px;
+}
+
+.check {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+  border: 2px solid var(--color-border);
+  color: transparent;
+  transition: background var(--transition-fast), border-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.check:hover {
+  border-color: var(--color-success);
+  color: var(--color-text-tertiary);
+}
+
+.checkDone {
+  background: var(--color-success);
+  border-color: var(--color-success);
+  color: var(--color-on-accent);
+}
+
+.checkDone:hover {
+  color: var(--color-on-accent);
+}
+
+.checkIcon {
+  width: 20px;
+  height: 20px;
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr;
+  gap: var(--spacing-sm);
+}
+
+.tile {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 62px;
+  padding: var(--spacing-sm) var(--spacing-xs);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-tertiary);
+  border: 1px solid transparent;
+  cursor: text;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.tile:hover {
+  border-color: var(--color-accent-muted);
+}
+
+.tileAccent {
+  background: var(--color-accent-subtle);
+}
+
+.value {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  line-height: 1.1;
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.valueAccent {
+  color: var(--color-text-accent);
+}
+
+.label {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.input {
+  width: 100%;
+  padding: 2px var(--spacing-xs);
+  text-align: center;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+.pair {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+}
+
+.pairInput {
+  flex: 1;
+  min-width: 0;
+  padding: 2px var(--spacing-xs);
+  text-align: center;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.pairSign {
+  flex-shrink: 0;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+}
+
+@media (max-width: 480px) {
+  .tiles {
+    grid-template-columns: 1.3fr 1fr 1fr;
+  }
+
+  .value {
+    font-size: var(--font-size-lg);
+  }
+}

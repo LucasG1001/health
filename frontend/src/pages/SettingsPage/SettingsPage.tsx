@@ -39,10 +39,6 @@ function SettingsForm({ settings, save }: SettingsFormProps) {
   const [calorieGoal, setCalorieGoal] = useState(
     settings.calorieGoalKcal != null ? String(settings.calorieGoalKcal) : ""
   );
-  const [soundEnabled, setSoundEnabled] = useState(settings.soundEnabled);
-  const [vibrationEnabled, setVibrationEnabled] = useState(settings.vibrationEnabled);
-  const [wakeLockEnabled, setWakeLockEnabled] = useState(settings.wakeLockEnabled);
-  const [restWorking, setRestWorking] = useState(String(settings.restWorkingSeconds));
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -56,13 +52,8 @@ function SettingsForm({ settings, save }: SettingsFormProps) {
     // e o feedback ainda dizia "salvas".
     const water = parseOptionalInteger(waterGoal);
     const calories = parseOptionalInteger(calorieGoal);
-    const working = parseOptionalInteger(restWorking);
-    if (water === INVALID || calories === INVALID || working === INVALID) {
+    if (water === INVALID || calories === INVALID) {
       setSaveError("Use apenas números inteiros positivos.");
-      return;
-    }
-    if (working === null) {
-      setSaveError("Informe o tempo de descanso.");
       return;
     }
 
@@ -72,10 +63,6 @@ function SettingsForm({ settings, save }: SettingsFormProps) {
         weighInFrequency,
         waterGoalMl: water,
         calorieGoalKcal: calories,
-        soundEnabled,
-        vibrationEnabled,
-        wakeLockEnabled,
-        restWorkingSeconds: working,
       });
       setFeedback("Configurações salvas.");
     } catch (err) {
@@ -124,58 +111,6 @@ function SettingsForm({ settings, save }: SettingsFormProps) {
             />
           </label>
         </div>
-      </section>
-
-      <section className={styles.section}>
-        <h2 className={styles.sectionTitle}>Treino</h2>
-        <div className={styles.grid}>
-          <label className={styles.field}>
-            <span className={styles.fieldLabel}>Descanso entre séries (s)</span>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={restWorking}
-              onChange={(e) => setRestWorking(e.target.value)}
-            />
-          </label>
-        </div>
-
-        <label className={styles.toggleRow}>
-          <div className={styles.toggleInfo}>
-            <span className={styles.toggleLabel}>Som</span>
-            <span className={styles.toggleHint}>Bipes de aviso e fim de descanso</span>
-          </div>
-          <input
-            type="checkbox"
-            className={styles.toggle}
-            checked={soundEnabled}
-            onChange={(e) => setSoundEnabled(e.target.checked)}
-          />
-        </label>
-        <label className={styles.toggleRow}>
-          <div className={styles.toggleInfo}>
-            <span className={styles.toggleLabel}>Vibração</span>
-            <span className={styles.toggleHint}>Vibra no aviso de 10s e no fim do descanso</span>
-          </div>
-          <input
-            type="checkbox"
-            className={styles.toggle}
-            checked={vibrationEnabled}
-            onChange={(e) => setVibrationEnabled(e.target.checked)}
-          />
-        </label>
-        <label className={styles.toggleRow}>
-          <div className={styles.toggleInfo}>
-            <span className={styles.toggleLabel}>Manter tela ligada</span>
-            <span className={styles.toggleHint}>Impede o bloqueio da tela durante o treino</span>
-          </div>
-          <input
-            type="checkbox"
-            className={styles.toggle}
-            checked={wakeLockEnabled}
-            onChange={(e) => setWakeLockEnabled(e.target.checked)}
-          />
-        </label>
       </section>
 
       {saveError && <p className={styles.errorText}>{saveError}</p>}

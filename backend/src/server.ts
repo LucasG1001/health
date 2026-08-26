@@ -17,8 +17,6 @@ import { goalRoutes } from "./routes/goalRoutes.js";
 import { photoRoutes } from "./routes/photoRoutes.js";
 import { exerciseRoutes } from "./routes/exerciseRoutes.js";
 import { splitRoutes } from "./routes/splitRoutes.js";
-import { sessionRoutes } from "./routes/sessionRoutes.js";
-import { sessionExerciseRoutes, sessionSetRoutes } from "./routes/sessionItemRoutes.js";
 import { statsRoutes } from "./routes/statsRoutes.js";
 import { notFoundHandler, errorHandler } from "./middleware/errorHandler.js";
 import { uploadErrorHandler } from "./middleware/uploadErrorHandler.js";
@@ -43,9 +41,6 @@ app.use("/api/goals", goalRoutes);
 app.use("/api/photos", photoRoutes);
 app.use("/api/exercises", exerciseRoutes);
 app.use("/api/splits", splitRoutes);
-app.use("/api/sessions", sessionRoutes);
-app.use("/api/session-exercises", sessionExerciseRoutes);
-app.use("/api/session-sets", sessionSetRoutes);
 app.use("/api/stats", statsRoutes);
 
 app.use("/uploads", express.static(UPLOAD_DIR, { maxAge: "365d", immutable: true }));

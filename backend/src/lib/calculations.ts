@@ -42,11 +42,6 @@ export function totalLoadKg(workingKg: number | null, additionalKg: number | nul
   return (workingKg ?? 0) + (additionalKg ?? 0);
 }
 
-export function calcEpley1Rm(weightKg: number, reps: number): number {
-  if (reps <= 1) return round1(weightKg);
-  return round1(weightKg * (1 + reps / 30));
-}
-
 export function calcProgressPct(start: number, current: number, target: number): number {
   if (start === target) return current === target ? 100 : 0;
   const pct = ((start - current) / (start - target)) * 100;

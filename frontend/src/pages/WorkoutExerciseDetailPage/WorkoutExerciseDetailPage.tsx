@@ -3,44 +3,24 @@ import { useParams } from "react-router-dom";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { YouTubeEmbed } from "../../components/YouTubeEmbed/YouTubeEmbed";
 import { NumericInput } from "../../components/NumericInput/NumericInput";
-import { useWorkoutSession } from "../../context/workoutSessionStore";
 import { updateExercisePlan, fetchSplit } from "../../services/splitService";
 import { updateExercise } from "../../services/exerciseService";
-import { MUSCLE_GROUP_LABELS, formatClock, formatKg, imageFocalStyle, repsTarget } from "../../utils/format";
+import { MUSCLE_GROUP_LABELS, formatKg, imageFocalStyle, repsTarget } from "../../utils/format";
 import { apiErrorMessage } from "../../utils/apiError";
-import { numberToMask, parseMaskedNumber } from "../../utils/numberMask";
+import { loadChanged, parsePlanForm, planFormOf, type PlanFormRaw } from "../../utils/planForm";
 import type { Split } from "../../types/split";
 import styles from "./WorkoutExerciseDetailPage.module.css";
 
-const DEFAULT_REST_SECONDS = 60;
-
-type EditField = "series" | "reps" | "carga" | "adicional" | "descanso";
-
-function parsePositiveInt(raw: string): number | null {
-  const parsed = Number(raw);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
-}
-
-function parseNonNegativeInt(raw: string): number | null {
-  const parsed = Number(raw);
-  return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
-}
+type EditField = "series" | "reps" | "carga" | "adicional";
 
 export function WorkoutExerciseDetailPage() {
   const { id, sxId } = useParams();
-  const { state, refreshSession } = useWorkoutSession();
-  const sessionActive = state.session !== null && state.session.status === "in_progress";
 
   const [split, setSplit] = useState<Split | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<EditField | null>(null);
-  const [series, setSeries] = useState("");
-  const [repsMin, setRepsMin] = useState("");
-  const [repsMax, setRepsMax] = useState("");
-  const [weight, setWeight] = useState("");
-  const [additional, setAdditional] = useState("");
-  const [rest, setRest] = useState("");
+  const [form, setForm] = useState<PlanFormRaw | null>(null);
 
   const backTo = `/treino/divisoes/${id}`;
 
@@ -52,14 +32,7 @@ export function WorkoutExerciseDetailPage() {
         if (!active) return;
         setSplit(data);
         const ex = data.exercises.find((e) => e.id === sxId);
-        if (ex) {
-          setSeries(String(ex.plannedSets.length || 3));
-          setRepsMin(String(ex.plannedSets[0]?.targetRepsMin ?? 12));
-          setRepsMax(ex.plannedSets[0]?.targetRepsMax != null ? String(ex.plannedSets[0].targetRepsMax) : "");
-          setWeight(numberToMask(ex.workingWeightKg));
-          setAdditional(numberToMask(ex.additionalWeightKg));
-          setRest(String(ex.restSeconds ?? DEFAULT_REST_SECONDS));
-        }
+        if (ex) setForm(planFormOf(ex));
       })
       .catch((err) => {
         if (active) setError(apiErrorMessage(err, "Não foi possível carregar o exercício."));
@@ -80,51 +53,38 @@ export function WorkoutExerciseDetailPage() {
     if (e.key === "Enter") e.currentTarget.blur();
   };
 
+  const patch = (field: keyof PlanFormRaw, value: string) =>
+    setForm((prev) => (prev ? { ...prev, [field]: value } : prev));
+
   const saveEdit = async () => {
     setEditing(null);
-    if (!id || !sxId || !planned) return;
-    const seriesValue = parsePositiveInt(series);
-    const minValue = parsePositiveInt(repsMin);
-    const maxValue = repsMax.trim() === "" ? null : parsePositiveInt(repsMax);
-    // Antes um valor inválido era descartado em silêncio: a tela voltava ao valor antigo
-    // sem dizer nada, e o campo continuava com o texto errado.
-    if (seriesValue === null || minValue === null || (repsMax.trim() !== "" && maxValue === null)) {
-      setError("Séries e repetições precisam ser números inteiros maiores que zero.");
-      setSeries(String(planned.plannedSets.length || 3));
-      setRepsMin(String(planned.plannedSets[0]?.targetRepsMin ?? 12));
-      setRepsMax(planned.plannedSets[0]?.targetRepsMax != null ? String(planned.plannedSets[0].targetRepsMax) : "");
+    if (!id || !sxId || !planned || !form) return;
+    const parsed = parsePlanForm(form);
+    if (!parsed.ok) {
+      setError(parsed.error);
+      setForm(planFormOf(planned));
       return;
     }
-    if (maxValue !== null && maxValue < minValue) {
-      setError("O máximo de repetições não pode ser menor que o mínimo.");
-      return;
-    }
-    const weightValue = parseMaskedNumber(weight);
-    const additionalValue = parseMaskedNumber(additional);
-    const restValue = parseNonNegativeInt(rest) ?? DEFAULT_REST_SECONDS;
+    const values = parsed.values;
     setError(null);
     try {
-      if (
-        weightValue !== (planned.workingWeightKg ?? null) ||
-        additionalValue !== (planned.additionalWeightKg ?? null)
-      ) {
+      if (loadChanged(planned, values)) {
         await updateExercise(planned.exerciseId, {
-          workingWeightKg: weightValue,
-          additionalWeightKg: additionalValue,
+          workingWeightKg: values.workingWeightKg,
+          additionalWeightKg: values.additionalWeightKg,
         });
       }
       const updated = await updateExercisePlan(id, sxId, {
-        series: seriesValue,
-        targetRepsMin: minValue,
-        targetRepsMax: maxValue,
-        restSeconds: restValue,
+        series: values.series,
+        targetRepsMin: values.targetRepsMin,
+        targetRepsMax: values.targetRepsMax,
       });
       setSplit(updated);
-      // O backend já ajustou as séries pendentes do treino em andamento; recarregar a
-      // sessão faz a mudança aparecer no treino atual, sem esperar o próximo.
-      if (sessionActive) await refreshSession();
+      const fresh = updated.exercises.find((e) => e.id === sxId);
+      if (fresh) setForm(planFormOf(fresh));
     } catch (err) {
       setError(apiErrorMessage(err, "Não foi possível salvar o exercício."));
+      setForm(planFormOf(planned));
     }
   };
 
@@ -159,9 +119,9 @@ export function WorkoutExerciseDetailPage() {
                   className={styles.statInput}
                   type="text"
                   inputMode="numeric"
-                  value={series}
+                  value={form?.series ?? ""}
                   autoFocus
-                  onChange={(e) => setSeries(e.target.value)}
+                  onChange={(e) => patch("series", e.target.value)}
                   onBlur={saveEdit}
                   onKeyDown={onEditKeyDown}
                   aria-label="Séries"
@@ -184,9 +144,9 @@ export function WorkoutExerciseDetailPage() {
                     className={styles.repsInput}
                     type="text"
                     inputMode="numeric"
-                    value={repsMin}
+                    value={form?.repsMin ?? ""}
                     autoFocus
-                    onChange={(e) => setRepsMin(e.target.value)}
+                    onChange={(e) => patch("repsMin", e.target.value)}
                     onKeyDown={onEditKeyDown}
                     aria-label="Reps mínimas"
                   />
@@ -196,8 +156,8 @@ export function WorkoutExerciseDetailPage() {
                     type="text"
                     inputMode="numeric"
                     placeholder="máx"
-                    value={repsMax}
-                    onChange={(e) => setRepsMax(e.target.value)}
+                    value={form?.repsMax ?? ""}
+                    onChange={(e) => patch("repsMax", e.target.value)}
                     onKeyDown={onEditKeyDown}
                     aria-label="Reps máximas"
                   />
@@ -218,9 +178,9 @@ export function WorkoutExerciseDetailPage() {
                 <NumericInput
                   className={`${styles.statInput} ${styles.statInputAccent}`}
                   placeholder="—"
-                  value={weight}
+                  value={form?.weight ?? ""}
                   autoFocus
-                  onChange={setWeight}
+                  onChange={(value) => patch("weight", value)}
                   onBlur={saveEdit}
                   onKeyDown={onEditKeyDown}
                   aria-label="Carga em kg"
@@ -238,9 +198,9 @@ export function WorkoutExerciseDetailPage() {
                 <NumericInput
                   className={styles.statInput}
                   placeholder="—"
-                  value={additional}
+                  value={form?.additional ?? ""}
                   autoFocus
-                  onChange={setAdditional}
+                  onChange={(value) => patch("additional", value)}
                   onBlur={saveEdit}
                   onKeyDown={onEditKeyDown}
                   aria-label="Peso adicional em kg"
@@ -251,26 +211,6 @@ export function WorkoutExerciseDetailPage() {
               <span className={styles.statLabel}>adicional</span>
             </div>
 
-            <div className={`${styles.statCard} ${styles.statCardEditable}`} onClick={() => startEdit("descanso")}>
-              {editing === "descanso" ? (
-                <input
-                  className={styles.statInput}
-                  type="text"
-                  inputMode="numeric"
-                  value={rest}
-                  autoFocus
-                  onChange={(e) => setRest(e.target.value)}
-                  onBlur={saveEdit}
-                  onKeyDown={onEditKeyDown}
-                  aria-label="Descanso em segundos"
-                />
-              ) : (
-                <span className={styles.statValue}>
-                  {formatClock((planned.restSeconds ?? DEFAULT_REST_SECONDS) * 1000)}
-                </span>
-              )}
-              <span className={styles.statLabel}>descanso</span>
-            </div>
           </div>
 
           {planned.instructions && (

@@ -1,17 +1,9 @@
 import { useNavigate } from "react-router-dom";
 import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { EmptyState } from "../../components/EmptyState/EmptyState";
-import {
-  ChartIcon,
-  ChevronRightIcon,
-  DumbbellIcon,
-  GearIcon,
-  PlayIcon,
-  PlusIcon,
-} from "../../components/Icon/icons";
+import { ChevronRightIcon, DumbbellIcon, GearIcon, PlusIcon } from "../../components/Icon/icons";
 import { ErrorBanner } from "../../components/ErrorBanner/ErrorBanner";
 import { Loading } from "../../components/Loading/Loading";
-import { useWorkoutSession } from "../../context/workoutSessionStore";
 import { useSplits } from "../../hooks/useSplits";
 import { muscleSummary } from "../../utils/format";
 import type { Split } from "../../types/split";
@@ -25,10 +17,7 @@ function splitSubtitle(split: Split): string {
 
 export function WorkoutHomePage() {
   const navigate = useNavigate();
-  const { state, bootError } = useWorkoutSession();
   const { splits, loading, error, reload } = useSplits();
-
-  const sessionActive = state.session !== null && state.session.status === "in_progress";
 
   return (
     <div className={styles.page}>
@@ -43,14 +32,6 @@ export function WorkoutHomePage() {
               aria-label="Exercícios"
             >
               <DumbbellIcon className={styles.iconButtonIcon} />
-            </button>
-            <button
-              type="button"
-              className={styles.iconButton}
-              onClick={() => navigate("/treino/historico")}
-              aria-label="Histórico"
-            >
-              <ChartIcon className={styles.iconButtonIcon} />
             </button>
             <button
               type="button"
@@ -72,23 +53,6 @@ export function WorkoutHomePage() {
         }
       />
 
-      {sessionActive && (
-        <button
-          type="button"
-          className={styles.resumeCard}
-          onClick={() =>
-            navigate(state.session?.splitId ? `/treino/divisoes/${state.session.splitId}` : "/treino")
-          }
-        >
-          <PlayIcon className={styles.resumeIcon} />
-          <div className={styles.resumeInfo}>
-            <span className={styles.resumeTitle}>Treino em andamento</span>
-            <span className={styles.resumeMeta}>{state.session!.splitName} — toque para continuar</span>
-          </div>
-        </button>
-      )}
-
-      {bootError && <ErrorBanner message={bootError} />}
       {error && <ErrorBanner message={error} onRetry={reload} />}
 
       {loading ? (

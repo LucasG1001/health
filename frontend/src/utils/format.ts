@@ -1,6 +1,5 @@
 import type { CSSProperties } from "react";
 import type { MuscleGroup } from "../types/exercise";
-import type { SetVariation } from "../types/split";
 import type { ActivityLevel, BloodType } from "../types/profile";
 import type { PhotoPose } from "../types/photo";
 import type { WeighInFrequency } from "../types/settings";
@@ -61,31 +60,6 @@ export function muscleSummary(
   return labels.filter(Boolean).join(separator);
 }
 
-export function formatClock(totalMs: number): string {
-  const totalSeconds = Math.max(0, Math.ceil(totalMs / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${String(seconds).padStart(2, "0")}`;
-}
-
-export function formatStopwatch(totalMs: number): string {
-  const totalSeconds = Math.max(0, Math.floor(totalMs / 1000));
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  const mm = String(minutes).padStart(2, "0");
-  const ss = String(seconds).padStart(2, "0");
-  return hours > 0 ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`;
-}
-
-export function formatDuration(totalSeconds: number | null | undefined): string {
-  if (totalSeconds == null) return "—";
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.round((totalSeconds % 3600) / 60);
-  if (hours > 0) return `${hours}h ${String(minutes).padStart(2, "0")}min`;
-  return `${minutes}min`;
-}
-
 export function formatDate(isoDate: string | null | undefined): string {
   if (!isoDate) return "—";
   const [year, month, day] = isoDate.slice(0, 10).split("-");
@@ -123,14 +97,6 @@ export const MUSCLE_GROUP_LABELS: Record<MuscleGroup, string> = {
   calves: "Panturrilha",
   abs: "Abdômen",
   other: "Outro",
-};
-
-export const VARIATION_LABELS: Record<SetVariation, string> = {
-  normal: "Normal",
-  drop_set: "Drop set",
-  bi_set: "Bi-set",
-  superset: "Superset",
-  rest_pause: "Rest-pause",
 };
 
 export const ACTIVITY_LABELS: Record<ActivityLevel, string> = {

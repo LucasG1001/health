@@ -1,15 +1,11 @@
 import { pool } from "../database/connection.js";
 import { buildUpdateSet } from "../lib/sqlUpdate.js";
-import { calcEpley1Rm } from "../lib/calculations.js";
-import { APP_TIMEZONE } from "../lib/dateUtils.js";
 import { isUniqueViolation } from "../lib/pgError.js";
 import { DuplicateExerciseError } from "./errors.js";
 import type {
   Exercise,
-  ExerciseHistoryPoint,
   ExercisePatch,
   ExerciseRow,
-  LastPerformance,
   MuscleGroup,
   NewExercise,
 } from "../types/exercise.js";
@@ -149,109 +145,4 @@ export async function remove(id: string): Promise<{ imagePath: string | null } |
   );
   if (!result.rows[0]) return null;
   return { imagePath: result.rows[0].image_path };
-}
-
-
-interface LastPerformanceSetRow {
-  set_type: string;
-  weight_kg: number | null;
-  reps: number | null;
-}
-
-export async function lastPerformance(exerciseId: string): Promise<LastPerformance | null> {
-  const latest = await pool.query<{ session_id: string; session_exercise_id: string; date: string }>(
-    `SELECT ws.id AS session_id, se.id AS session_exercise_id,
-            (ws.started_at AT TIME ZONE $2)::date::text AS date
-       FROM workout_sessions ws
-       JOIN session_exercises se ON se.session_id = ws.id
-      WHERE se.exercise_id = $1 AND ws.status = 'completed'
-      ORDER BY ws.started_at DESC
-      LIMIT 1`,
-    [exerciseId, APP_TIMEZONE]
-  );
-  const head = latest.rows[0];
-  if (!head) return null;
-
-  const sets = await pool.query<LastPerformanceSetRow>(
-    `SELECT set_type, weight_kg, reps
-       FROM session_sets
-      WHERE session_exercise_id = $1 AND completed_at IS NOT NULL
-      ORDER BY position ASC`,
-    [head.session_exercise_id]
-  );
-
-  return {
-    sessionId: head.session_id,
-    date: head.date,
-    sets: sets.rows.map((row) => ({
-      setType: row.set_type,
-      weightKg: row.weight_kg,
-      reps: row.reps,
-    })),
-  };
-}
-
-interface HistoryRow {
-  session_id: string;
-  date: string;
-  max_weight_kg: number | null;
-  total_volume_kg: number | null;
-  working_sets: number;
-  best_weight_kg: number | null;
-  best_reps: number | null;
-}
-
-export async function history(
-  exerciseId: string,
-  from: string | null,
-  to: string | null
-): Promise<ExerciseHistoryPoint[]> {
-  const values: unknown[] = [exerciseId, APP_TIMEZONE];
-  const conditions: string[] = [];
-  if (from) {
-    values.push(from);
-    conditions.push(`(ws.started_at AT TIME ZONE $2)::date >= $${values.length}`);
-  }
-  if (to) {
-    values.push(to);
-    conditions.push(`(ws.started_at AT TIME ZONE $2)::date <= $${values.length}`);
-  }
-  const extraWhere = conditions.length ? `AND ${conditions.join(" AND ")}` : "";
-
-  // O filtro de série válida está no JOIN para que todas as métricas do ponto — inclusive
-  // o par (peso, reps) do melhor 1RM — venham do mesmo conjunto de séries. A ordenação
-  // termina em ss.id para ser total: sem isso, em empate os dois ARRAY_AGG podiam
-  // escolher linhas diferentes e devolver um par que nunca existiu.
-  const result = await pool.query<HistoryRow>(
-    `SELECT ws.id AS session_id,
-            (ws.started_at AT TIME ZONE $2)::date::text AS date,
-            MAX(ss.weight_kg) AS max_weight_kg,
-            SUM(ss.weight_kg * ss.reps) AS total_volume_kg,
-            COUNT(*)::int AS working_sets,
-            (ARRAY_AGG(ss.weight_kg
-              ORDER BY ss.weight_kg * (1 + ss.reps / 30.0) DESC, ss.id))[1] AS best_weight_kg,
-            (ARRAY_AGG(ss.reps
-              ORDER BY ss.weight_kg * (1 + ss.reps / 30.0) DESC, ss.id))[1] AS best_reps
-       FROM workout_sessions ws
-       JOIN session_exercises se ON se.session_id = ws.id AND se.exercise_id = $1
-       JOIN session_sets ss ON ss.session_exercise_id = se.id
-        AND ss.set_type = 'working'
-        AND ss.completed_at IS NOT NULL AND ss.weight_kg IS NOT NULL AND ss.reps IS NOT NULL
-      WHERE ws.status = 'completed' ${extraWhere}
-      GROUP BY ws.id, ws.started_at
-      ORDER BY ws.started_at ASC`,
-    values
-  );
-
-  return result.rows.map((row) => ({
-    sessionId: row.session_id,
-    date: row.date,
-    maxWeightKg: row.max_weight_kg,
-    totalVolumeKg: row.total_volume_kg,
-    workingSets: row.working_sets,
-    estOneRepMax:
-      row.best_weight_kg != null && row.best_reps != null
-        ? calcEpley1Rm(row.best_weight_kg, row.best_reps)
-        : null,
-  }));
 }

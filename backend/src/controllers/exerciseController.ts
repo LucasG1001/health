@@ -1,5 +1,5 @@
 import { asyncHandler } from "../lib/asyncHandler.js";
-import { parseDateRange, respondValidationError } from "../lib/validation.js";
+import { respondValidationError } from "../lib/validation.js";
 import { relativeUploadPath, removeUploadedFile } from "../lib/upload.js";
 import { createExerciseSchema, updateExerciseSchema } from "../schemas/exercise.js";
 import * as exerciseModel from "../models/exerciseModel.js";
@@ -87,13 +87,4 @@ export const removeImage = asyncHandler("Erro ao remover a imagem.", async (req,
   const oldPath = await exerciseModel.clearImagePath(id);
   await removeUploadedFile(oldPath);
   res.json(await exerciseModel.findById(id));
-});
-
-export const getLastPerformance = asyncHandler("Erro ao buscar o último desempenho.", async (req, res) => {
-  res.json(await exerciseModel.lastPerformance(String(req.params.id)));
-});
-
-export const getHistory = asyncHandler("Erro ao buscar o histórico do exercício.", async (req, res) => {
-  const { from, to } = parseDateRange(req);
-  res.json(await exerciseModel.history(String(req.params.id), from, to));
 });

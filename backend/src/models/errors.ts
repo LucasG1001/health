@@ -29,20 +29,6 @@ export class DuplicateExerciseError extends DomainError {
   }
 }
 
-export class ActiveSessionExistsError extends DomainError {
-  constructor() {
-    super("Já existe um treino em andamento.", 409);
-    this.name = "ActiveSessionExistsError";
-  }
-}
-
-export class SessionAlreadyFinishedError extends DomainError {
-  constructor() {
-    super("Este treino já foi finalizado.", 409);
-    this.name = "SessionAlreadyFinishedError";
-  }
-}
-
 export class UnsupportedImageError extends DomainError {
   constructor() {
     super("Formato de imagem não suportado (use JPG, PNG, WEBP ou GIF).", 400);

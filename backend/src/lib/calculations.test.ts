@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calcAge, calcBmi, calcBmr, calcEpley1Rm, calcTdee, deriveBodyMetrics } from "./calculations.js";
+import { calcAge, calcBmi, calcBmr, calcTdee, deriveBodyMetrics } from "./calculations.js";
 
 describe("calcAge", () => {
   it("conta o ano cheio depois do aniversário", () => {
@@ -34,16 +34,6 @@ describe("calcBmr", () => {
 describe("calcTdee", () => {
   it("multiplica pelo fator de atividade", () => {
     expect(calcTdee(1780, "moderate")).toBe(2759);
-  });
-});
-
-describe("calcEpley1Rm", () => {
-  it("retorna o próprio peso para 1 rep", () => {
-    expect(calcEpley1Rm(100, 1)).toBe(100);
-  });
-
-  it("estima 1RM pela fórmula de Epley", () => {
-    expect(calcEpley1Rm(100, 10)).toBe(133.3);
   });
 });
 

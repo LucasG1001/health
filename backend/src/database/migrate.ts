@@ -27,10 +27,6 @@ export async function migrate(): Promise<void> {
                               CHECK (weigh_in_frequency IN ('daily','weekly','biweekly','monthly','off')),
       water_goal_ml         INTEGER,
       calorie_goal_kcal     INTEGER,
-      sound_enabled         BOOLEAN NOT NULL DEFAULT TRUE,
-      vibration_enabled     BOOLEAN NOT NULL DEFAULT TRUE,
-      wake_lock_enabled     BOOLEAN NOT NULL DEFAULT TRUE,
-      rest_working_seconds  INTEGER NOT NULL DEFAULT 90,
       created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
@@ -129,7 +125,7 @@ export async function migrate(): Promise<void> {
   `);
 
   // Peso extra somado à pilha (rodinha/anilha do aparelho). A carga levantada é a soma
-  // das duas, e é ela que vai para session_sets.weight_kg.
+  // das duas parcelas, que é o número exibido no card do exercício.
   await pool.query(`
     ALTER TABLE exercises ADD COLUMN IF NOT EXISTS additional_weight_kg NUMERIC(6,2);
   `);
@@ -151,7 +147,6 @@ export async function migrate(): Promise<void> {
       split_id      UUID NOT NULL REFERENCES workout_splits(id) ON DELETE CASCADE,
       exercise_id   UUID NOT NULL REFERENCES exercises(id) ON DELETE CASCADE,
       position      INTEGER NOT NULL DEFAULT 0,
-      rest_seconds  INTEGER,
       notes         TEXT,
       created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       UNIQUE (split_id, exercise_id)
@@ -177,73 +172,27 @@ export async function migrate(): Promise<void> {
     CREATE INDEX IF NOT EXISTS planned_sets_se_idx ON planned_sets (split_exercise_id);
   `);
 
+  // Um registro por exercício marcado como feito no dia. A chave é (split_id, exercise_id)
+  // e não split_exercises.id porque essas linhas são recriadas a cada reordenação da
+  // divisão, o que levaria o check do dia embora na cascata.
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS workout_sessions (
-      id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      split_id          UUID REFERENCES workout_splits(id) ON DELETE SET NULL,
-      split_name        TEXT NOT NULL,
-      status            TEXT NOT NULL DEFAULT 'in_progress' CHECK (status IN ('in_progress','completed')),
-      started_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      finished_at       TIMESTAMPTZ,
-      duration_seconds  INTEGER,
-      total_volume_kg   NUMERIC(12,2),
-      notes             TEXT,
-      created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    CREATE TABLE IF NOT EXISTS exercise_checks (
+      id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      split_id     UUID NOT NULL REFERENCES workout_splits(id) ON DELETE CASCADE,
+      exercise_id  UUID NOT NULL REFERENCES exercises(id) ON DELETE CASCADE,
+      checked_on   DATE NOT NULL,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (split_id, exercise_id, checked_on)
     );
   `);
 
   await pool.query(`
-    CREATE UNIQUE INDEX IF NOT EXISTS workout_sessions_active_idx
-      ON workout_sessions ((TRUE)) WHERE status = 'in_progress';
+    CREATE INDEX IF NOT EXISTS exercise_checks_date_idx ON exercise_checks (checked_on);
   `);
 
-  await pool.query(`
-    CREATE INDEX IF NOT EXISTS workout_sessions_started_idx ON workout_sessions (started_at);
-  `);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS session_exercises (
-      id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      session_id     UUID NOT NULL REFERENCES workout_sessions(id) ON DELETE CASCADE,
-      exercise_id    UUID REFERENCES exercises(id) ON DELETE SET NULL,
-      exercise_name  TEXT NOT NULL,
-      position       INTEGER NOT NULL DEFAULT 0,
-      notes          TEXT,
-      created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `);
-
-  await pool.query(`
-    CREATE INDEX IF NOT EXISTS session_exercises_session_idx ON session_exercises (session_id);
-  `);
-
-  await pool.query(`
-    CREATE INDEX IF NOT EXISTS session_exercises_exercise_idx ON session_exercises (exercise_id);
-  `);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS session_sets (
-      id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      session_exercise_id  UUID NOT NULL REFERENCES session_exercises(id) ON DELETE CASCADE,
-      position             INTEGER NOT NULL DEFAULT 0,
-      set_type             TEXT NOT NULL DEFAULT 'working' CHECK (set_type IN ('warmup','working')),
-      variation            TEXT NOT NULL DEFAULT 'normal'
-                             CHECK (variation IN ('normal','drop_set','bi_set','superset','rest_pause')),
-      target_reps_min      INTEGER,
-      target_reps_max      INTEGER,
-      rest_seconds         INTEGER,
-      weight_kg            NUMERIC(6,2),
-      reps                 INTEGER,
-      rpe                  NUMERIC(3,1),
-      rir                  SMALLINT,
-      completed_at         TIMESTAMPTZ,
-      created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `);
-
-  // Sobras de features removidas (ExerciseDB, PRs, gamificação) e de séries planejadas
-  // que nunca chegaram a ser gravadas. Nada abaixo tem leitor no código.
+  // Sobras de features removidas (ExerciseDB, PRs, gamificação, execução cronometrada de
+  // sessão) e de séries planejadas que nunca chegaram a ser gravadas. Nada abaixo tem
+  // leitor no código.
   await pool.query(`DROP TABLE IF EXISTS user_badges;`);
   await pool.query(`DROP TABLE IF EXISTS badges;`);
   await pool.query(`DROP TABLE IF EXISTS personal_records;`);
@@ -265,18 +214,25 @@ export async function migrate(): Promise<void> {
   // Aquecimento planejado não existe, então este descanso nunca era aplicado.
   await pool.query(`ALTER TABLE settings DROP COLUMN IF EXISTS rest_warmup_seconds;`);
 
-  // FKs sem índice: apagar uma divisão ou um exercício varria a tabela filha inteira.
-  await pool.query(`
-    CREATE INDEX IF NOT EXISTS workout_sessions_split_idx ON workout_sessions (split_id);
-  `);
+  // FK sem índice: apagar um exercício varria a tabela filha inteira.
   await pool.query(`
     CREATE INDEX IF NOT EXISTS split_exercises_exercise_idx ON split_exercises (exercise_id);
   `);
 
-  // As séries são sempre lidas por exercício e em ordem de posição.
+  // A execução cronometrada de sessão saiu: o treino agora é consulta de carga/reps mais
+  // um check por exercício no dia (exercise_checks). Sem sessão não há volume nem duração.
+  await pool.query(`DROP TABLE IF EXISTS session_sets;`);
+  await pool.query(`DROP TABLE IF EXISTS session_exercises;`);
+  await pool.query(`DROP TABLE IF EXISTS workout_sessions;`);
+
+  // O descanso era cronometrado a partir daqui; sem timer o número não tem leitor.
+  await pool.query(`ALTER TABLE split_exercises DROP COLUMN IF EXISTS rest_seconds;`);
+
   await pool.query(`
-    CREATE INDEX IF NOT EXISTS session_sets_se_position_idx
-      ON session_sets (session_exercise_id, position);
+    ALTER TABLE settings
+      DROP COLUMN IF EXISTS sound_enabled,
+      DROP COLUMN IF EXISTS vibration_enabled,
+      DROP COLUMN IF EXISTS wake_lock_enabled,
+      DROP COLUMN IF EXISTS rest_working_seconds;
   `);
-  await pool.query(`DROP INDEX IF EXISTS session_sets_se_idx;`);
 }

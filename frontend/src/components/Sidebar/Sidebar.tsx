@@ -1,10 +1,7 @@
-import { useState, type ComponentType } from "react";
+import { type ComponentType } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { useWorkoutSession } from "../../context/workoutSessionStore";
-import { Modal } from "../Modal/Modal";
-import { apiErrorMessage } from "../../utils/apiError";
 import styles from "./Sidebar.module.css";
-import { DumbbellIcon, GearIcon, PlusIcon, RulerIcon, StopIcon } from "../Icon/icons";
+import { DumbbellIcon, GearIcon, PlusIcon, RulerIcon } from "../Icon/icons";
 
 interface NavItem {
   path: string;
@@ -27,15 +24,8 @@ interface SidebarProps {
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { state, finish, discard } = useWorkoutSession();
-  const sessionActive = state.session !== null && state.session.status === "in_progress";
-
-  const [endOpen, setEndOpen] = useState(false);
-  const [endError, setEndError] = useState<string | null>(null);
-  const [ending, setEnding] = useState(false);
 
   const onWorkoutArea = location.pathname.startsWith("/treino");
-  const endMode = onWorkoutArea && sessionActive;
 
   const handleAdd = () => {
     if (location.pathname.startsWith("/medidas")) {
@@ -44,42 +34,6 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       navigate("/treino/divisoes/nova");
     }
   };
-
-  const handleFab = () => {
-    if (endMode) {
-      setEndError(null);
-      setEndOpen(true);
-    } else {
-      handleAdd();
-    }
-  };
-
-  // A gaveta só fecha quando a ação dá certo: antes o erro ia para o console e o
-  // usuário achava que o treino tinha sido finalizado.
-  const runEndAction = async (action: () => Promise<void>, failureMessage: string) => {
-    if (ending) return;
-    setEnding(true);
-    setEndError(null);
-    try {
-      await action();
-      setEndOpen(false);
-    } catch (err) {
-      setEndError(apiErrorMessage(err, failureMessage));
-    } finally {
-      setEnding(false);
-    }
-  };
-
-  const handleFinish = () =>
-    runEndAction(async () => {
-      const sessionId = state.session?.id;
-      const { summary } = await finish();
-      if (sessionId) navigate(`/treino/sessao/${sessionId}/resumo`, { replace: true, state: { summary } });
-    }, "Não foi possível finalizar o treino.");
-
-  const handleDiscard = () => runEndAction(discard, "Não foi possível descartar o treino.");
-
-  const FabIcon = endMode ? StopIcon : PlusIcon;
 
   const renderBarItem = (item: NavItem) => {
     const ItemIcon = item.icon;
@@ -139,26 +93,14 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         {renderBarItem(NAV_ITEMS[0]!)}
         <button
           type="button"
-          className={`${styles.barAdd} ${endMode ? styles.barAddEnd : ""}`}
-          onClick={handleFab}
-          aria-label={endMode ? "Encerrar treino" : onWorkoutArea ? "Novo treino" : "Adicionar"}
+          className={styles.barAdd}
+          onClick={handleAdd}
+          aria-label={onWorkoutArea ? "Novo treino" : "Adicionar"}
         >
-          <FabIcon className={styles.barAddIcon} />
+          <PlusIcon className={styles.barAddIcon} />
         </button>
         {renderBarItem(NAV_ITEMS[1]!)}
       </nav>
-
-      {endOpen && (
-        <Modal title="Encerrar treino?" onClose={() => setEndOpen(false)}>
-          {endError && <p className={styles.endError}>{endError}</p>}
-          <button type="button" className={styles.finalizeButton} onClick={handleFinish} disabled={ending}>
-            {ending ? "Encerrando…" : "Finalizar treino"}
-          </button>
-          <button type="button" className={styles.discardButton} onClick={handleDiscard} disabled={ending}>
-            Descartar treino
-          </button>
-        </Modal>
-      )}
     </aside>
   );
 }

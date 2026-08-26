@@ -41,6 +41,13 @@ export async function updateExercisePlan(
   return response.data;
 }
 
+export async function setExerciseCheck(
+  splitId: string,
+  splitExerciseId: string,
+  checked: boolean
+): Promise<void> {
+  await api.put(`/api/splits/${splitId}/exercises/${splitExerciseId}/check`, { checked });
+}
 
 export async function deleteSplit(id: string): Promise<void> {
   await api.delete(`/api/splits/${id}`);

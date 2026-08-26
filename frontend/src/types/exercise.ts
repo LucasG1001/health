@@ -45,24 +45,3 @@ export interface ExerciseInput {
   notes?: string | null;
   videoUrl?: string | null;
 }
-
-export interface LastPerformanceSet {
-  setType: string;
-  weightKg: number | null;
-  reps: number | null;
-}
-
-export interface LastPerformance {
-  sessionId: string;
-  date: string;
-  sets: LastPerformanceSet[];
-}
-
-export interface ExerciseHistoryPoint {
-  sessionId: string;
-  date: string;
-  maxWeightKg: number | null;
-  totalVolumeKg: number | null;
-  workingSets: number;
-  estOneRepMax: number | null;
-}

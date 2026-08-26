@@ -3,7 +3,6 @@ import { parseDateRange } from "../lib/validation.js";
 import { deriveBodyMetrics } from "../lib/calculations.js";
 import * as measurementModel from "../models/measurementModel.js";
 import * as profileModel from "../models/profileModel.js";
-import * as statsModel from "../models/statsModel.js";
 import type { ActivityLevel, BiologicalSex } from "../types/profile.js";
 
 export const body = asyncHandler("Erro ao buscar a evolução corporal.", async (req, res) => {
@@ -35,9 +34,4 @@ export const body = asyncHandler("Erro ao buscar a evolução corporal.", async 
       };
     })
   );
-});
-
-export const volume = asyncHandler("Erro ao buscar o volume de treino.", async (req, res) => {
-  const groupBy = req.query.groupBy === "month" ? "month" : "week";
-  res.json(await statsModel.volumeByPeriod(groupBy));
 });

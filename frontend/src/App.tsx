@@ -1,9 +1,6 @@
 import { Suspense, lazy, useState } from "react";
 import { BrowserRouter, Link, Navigate, Route, Routes } from "react-router-dom";
-import { WorkoutSessionProvider } from "./context/WorkoutSessionContext";
 import { Sidebar } from "./components/Sidebar/Sidebar";
-import { ActiveSessionBar } from "./components/ActiveSessionBar/ActiveSessionBar";
-import { InterRestModal } from "./components/InterRestModal/InterRestModal";
 import { EmptyState } from "./components/EmptyState/EmptyState";
 import { ErrorBoundary } from "./components/ErrorBoundary/ErrorBoundary";
 import { DumbbellIcon } from "./components/Icon/icons";
@@ -20,18 +17,13 @@ import { SplitEditorPage } from "./pages/SplitEditorPage/SplitEditorPage";
 import { WorkoutExerciseDetailPage } from "./pages/WorkoutExerciseDetailPage/WorkoutExerciseDetailPage";
 import { ExercisesPage } from "./pages/ExercisesPage/ExercisesPage";
 import { ExerciseFormPage } from "./pages/ExerciseFormPage/ExerciseFormPage";
-import { SessionSummaryPage } from "./pages/SessionSummaryPage/SessionSummaryPage";
-import { SessionDetailPage } from "./pages/SessionDetailPage/SessionDetailPage";
 import { SettingsPage } from "./pages/SettingsPage/SettingsPage";
 import styles from "./App.module.css";
 
-// As duas telas de gráfico carregam o recharts; sem o import tardio ele entra no mesmo
-// chunk da tela de treino, que não desenha gráfico nenhum.
+// A tela de gráfico carrega o recharts; sem o import tardio ele entra no mesmo chunk da
+// tela de treino, que não desenha gráfico nenhum.
 const MeasuresPage = lazy(() =>
   import("./pages/MeasuresPage/MeasuresPage").then((module) => ({ default: module.MeasuresPage }))
-);
-const HistoryPage = lazy(() =>
-  import("./pages/HistoryPage/HistoryPage").then((module) => ({ default: module.HistoryPage }))
 );
 
 const SIDEBAR_STORAGE_KEY = "sidebar-collapsed";
@@ -76,16 +68,11 @@ function Layout() {
             <Route path="/treino/exercicios" element={<ExercisesPage />} />
             <Route path="/treino/exercicios/novo" element={<ExerciseFormPage />} />
             <Route path="/treino/exercicios/:id/editar" element={<ExerciseFormPage />} />
-            <Route path="/treino/sessao/:id/resumo" element={<SessionSummaryPage />} />
-            <Route path="/treino/historico" element={<HistoryPage />} />
-            <Route path="/treino/historico/:id" element={<SessionDetailPage />} />
             <Route path="/configuracoes" element={<SettingsPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </Suspense>
       </main>
-      <ActiveSessionBar />
-      <InterRestModal />
     </div>
   );
 }
@@ -109,11 +96,9 @@ function App() {
   return (
     <ErrorBoundary>
       <BrowserRouter>
-        <WorkoutSessionProvider>
-          <Routes>
-            <Route path="*" element={<Layout />} />
-          </Routes>
-        </WorkoutSessionProvider>
+        <Routes>
+          <Route path="*" element={<Layout />} />
+        </Routes>
       </BrowserRouter>
     </ErrorBoundary>
   );

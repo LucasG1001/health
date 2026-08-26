@@ -1,9 +1,5 @@
 import type { MuscleGroup } from "./exercise";
 
-export type SetType = "warmup" | "working";
-
-export type SetVariation = "normal" | "drop_set" | "bi_set" | "superset" | "rest_pause";
-
 export interface PlannedSet {
   id: string;
   position: number;
@@ -23,7 +19,8 @@ export interface SplitExercise {
   imageZoom: number;
   machineSetting: string | null;
   position: number;
-  restSeconds: number | null;
+  /** Marcado como feito hoje (reseta na virada do dia). */
+  checkedToday: boolean;
   workingWeightKg: number | null;
   additionalWeightKg: number | null;
   videoUrl: string | null;
@@ -50,8 +47,6 @@ export interface PlannedSetInput {
 export interface SplitExerciseInput {
   exerciseId: string;
   notes?: string | null;
-  workingWeightKg?: number | null;
-  restSeconds?: number | null;
   plannedSets: PlannedSetInput[];
 }
 
@@ -60,6 +55,4 @@ export interface UpdateExercisePlanInput {
   series?: number;
   targetRepsMin: number;
   targetRepsMax?: number | null;
-  workingWeightKg?: number | null;
-  restSeconds?: number | null;
 }

@@ -28,47 +28,11 @@
   height: 20px;
 }
 
-.resumeCard {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-base);
-  padding: var(--spacing-lg);
-  background: var(--color-accent-subtle);
-  border: 1px solid var(--color-accent);
-  border-radius: var(--radius-lg);
-  text-align: left;
-  transition: background var(--transition-fast);
-  animation: cardEnter var(--transition-base);
-}
 
-.resumeCard:hover {
-  background: var(--color-bg-hover);
-}
 
-.resumeIcon {
-  width: 32px;
-  height: 32px;
-  color: var(--color-accent);
-  flex-shrink: 0;
-}
 
-.resumeInfo {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
 
-.resumeTitle {
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-primary);
-}
 
-.resumeMeta {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-}
 
 .loading {
   color: var(--color-text-tertiary);

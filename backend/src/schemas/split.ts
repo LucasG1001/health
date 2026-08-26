@@ -35,7 +35,6 @@ export const replaceSplitExercisesSchema = z.object({
       z.object({
         exerciseId: z.uuid("Exercício inválido."),
         notes: z.string().max(2000).nullish(),
-        restSeconds: z.number().int().min(0).max(3600).nullish(),
         plannedSets: z.array(plannedSetSchema).min(1, "Cada exercício precisa de ao menos uma série."),
       })
     )
@@ -49,12 +48,11 @@ export const replaceSplitExercisesSchema = z.object({
 
 export const updateExercisePlanSchema = z
   .object({
-    // Opcional: sem `series` só os alvos mudam, sem recriar as séries planejadas — é o que
-    // o painel de descanso precisa para ajustar reps sem mexer na quantidade.
+    // Opcional: sem `series` só os alvos mudam, sem recriar as séries planejadas (nem os
+    // ids), que é o caso de editar só as reps no card do exercício.
     series: z.number().int().min(1, "Informe ao menos uma série.").max(20, "Máximo de 20 séries.").optional(),
     targetRepsMin: z.number().int().min(1, "Repetições alvo inválidas.").max(200),
     targetRepsMax: z.number().int().min(1).max(200).nullish(),
-    restSeconds: z.number().int().min(0).max(3600).nullish(),
   })
   .refine(REPS_RANGE.check, { message: REPS_RANGE.message });
 
