@@ -236,6 +236,27 @@ export async function migrate(): Promise<void> {
   // checkModel usam o índice do UNIQUE (split_id, exercise_id, checked_on).
   await pool.query(`DROP INDEX IF EXISTS exercise_checks_date_idx;`);
 
+  // Log do treino: uma linha por campo de carga alterado (exerciseModel grava na mesma
+  // transação). SET NULL + nome copiado: o log sobrevive à exclusão do exercício.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS exercise_load_logs (
+      id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      exercise_id    UUID REFERENCES exercises(id) ON DELETE SET NULL,
+      exercise_name  TEXT NOT NULL,
+      field          TEXT NOT NULL CHECK (field IN ('working_weight_kg','additional_weight_kg')),
+      old_value      NUMERIC(6,2),
+      new_value      NUMERIC(6,2),
+      changed_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS exercise_load_logs_changed_idx ON exercise_load_logs (changed_at DESC);
+  `);
+  // FK sem índice: apagar um exercício varreria o log inteiro para o SET NULL.
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS exercise_load_logs_exercise_idx ON exercise_load_logs (exercise_id);
+  `);
+
   // Linhas únicas criadas uma vez aqui, e não a cada leitura nos models.
   await pool.query(`INSERT INTO profile (singleton) VALUES (TRUE) ON CONFLICT (singleton) DO NOTHING;`);
   await pool.query(`INSERT INTO settings (singleton) VALUES (TRUE) ON CONFLICT (singleton) DO NOTHING;`);

@@ -4,6 +4,7 @@ import { migrate } from "../src/database/migrate.js";
 import { ensureUploadDirs } from "../src/lib/upload.js";
 
 const TABLES = [
+  "exercise_load_logs",
   "exercise_checks",
   "planned_sets",
   "split_exercises",

@@ -1,9 +1,9 @@
 import { useNavigate } from "react-router-dom";
-import { PageHeader } from "../../components/PageHeader/PageHeader";
 import { EmptyState } from "../../components/EmptyState/EmptyState";
-import { ChevronRightIcon, DumbbellIcon, GearIcon, PlusIcon } from "../../components/Icon/icons";
+import { ChevronRightIcon, DumbbellIcon } from "../../components/Icon/icons";
 import { ErrorBanner } from "../../components/ErrorBanner/ErrorBanner";
 import { Loading } from "../../components/Loading/Loading";
+import { WorkoutHeader } from "../../components/WorkoutHeader/WorkoutHeader";
 import { useSplits } from "../../hooks/useSplits";
 import { muscleSummary } from "../../utils/format";
 import type { Split } from "../../types/split";
@@ -21,37 +21,7 @@ export function WorkoutHomePage() {
 
   return (
     <div className={styles.page}>
-      <PageHeader
-        title=""
-        actions={
-          <>
-            <button
-              type="button"
-              className={styles.iconButton}
-              onClick={() => navigate("/treino/exercicios")}
-              aria-label="Exercícios"
-            >
-              <DumbbellIcon className={styles.iconButtonIcon} />
-            </button>
-            <button
-              type="button"
-              className={styles.iconButton}
-              onClick={() => navigate("/treino/divisoes/nova")}
-              aria-label="Novo treino"
-            >
-              <PlusIcon className={styles.iconButtonIcon} />
-            </button>
-            <button
-              type="button"
-              className={styles.iconButton}
-              onClick={() => navigate("/configuracoes")}
-              aria-label="Configurações"
-            >
-              <GearIcon className={styles.iconButtonIcon} />
-            </button>
-          </>
-        }
-      />
+      <WorkoutHeader />
 
       {error && <ErrorBanner message={error} onRetry={reload} />}
 

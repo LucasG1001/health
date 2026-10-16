@@ -22,7 +22,7 @@ cd backend && npm run db:up      # Postgres de dev em Docker (docker-compose.dev
 # frontend (Vite)
 cd frontend && npm run dev       # http://localhost:5173 (proxy /api e /uploads → :3333)
 cd frontend && npm run build     # tsc -b + vite build
-cd frontend && npm test          # vitest (utils puros: planForm, reorder, splitMerge, measurements, load)
+cd frontend && npm test          # vitest (utils puros: planForm, reorder, splitMerge, measurements, loadLog, load)
 cd frontend && npm run lint      # ESLint (regras react-hooks v7 — ver Convenções)
 ```
 
@@ -45,7 +45,8 @@ Em produção o Express serve o build do frontend (`backend/public`, copiado na 
 Padrão em camadas por domínio: `types/` → `models/` (pg puro, mapper snake→camel, queries parametrizadas) → `schemas/` (Zod) → `controllers/` (asyncHandler + Zod, erros `{ error: "msg PT" }`) → `routes/`.
 
 - **`database/`** — `connection.ts` (pool com timeouts, `pool.on("error")`, `rollback()` que não mascara o erro original, type parsers de NUMERIC/DATE→number/string) e `migrate.ts` (DDL idempotente).
-- **Domínios**: profile, settings, measurement, goal (1 ativa — índice único parcial), photo (multer), exercise (catálogo próprio, com `video_url`), split, check, stats (só `body`, da área de Medidas).
+- **Domínios**: profile, settings, measurement, goal (1 ativa — índice único parcial), photo (multer), exercise (catálogo próprio, com `video_url`), split, check, load-log, stats (só `body`, da área de Medidas).
+- **Log de carga**: toda mudança de `working_weight_kg`/`additional_weight_kg` passa por `exerciseModel.create`/`update`, que grava em `exercise_load_logs` na **mesma transação** (`loadChanges` em `lib/loadLog.ts` decide o que mudou: campo ausente não conta, null ≠ 0). Não altere a carga por outro caminho, senão o log fica furado. Uma linha por campo; os dois campos de um save têm o mesmo `changed_at` (truncado em ms, que é o cursor `before`). `GET /api/load-log?limit&before` nunca corta um instante entre páginas, então pode devolver uma linha a mais que `limit`.
 - **Check do dia**: `PUT /api/splits/:id/exercises/:sxId/check {checked}` → 204 (`checkModel.setCheck`, INSERT idempotente / DELETE do dia). A linha é chaveada por **(split_id, exercise_id)**, nunca por `split_exercises.id`: `replaceExercises` apaga e reinsere essas linhas a cada reordenação, e a cascata levaria o check embora. A leitura vem embutida no DTO da divisão (`SplitExercise.checkedToday`, um `EXISTS` no `EXERCISES_SQL` de `splitModel`), então a tela do treino não faz um GET a mais.
 - **Plano**: `splitModel.updateExercisePlan` grava numa transação e checa o `split_exercise` dentro dela com `FOR UPDATE` (um reordenar concorrente recria as linhas); ausente, lança `NotFoundError` (404). `series` é opcional no corpo — ausente, só os alvos mudam e as `planned_sets` (com seus ids) são preservadas; o frontend só manda `series` quando a quantidade mudou (`planPatch`).
 - **Erros**: `lib/asyncHandler.ts` loga o inesperado e responde 500; `DomainError`/`NotFoundError` (`models/errors.ts`) lançados do model viram 4xx; `lib/pgError.ts` traduz códigos do Postgres (FK, CHECK, UUID/data inválidos) em 4xx, com mensagem por nome de constraint (`BY_CONSTRAINT`); `middleware/requireUuid.ts` barra `:id` malformado antes do SQL. Não deixe erro de banco virar 500 sem log.
@@ -55,6 +56,7 @@ Padrão em camadas por domínio: `types/` → `models/` (pg puro, mapper snake�
 ### Frontend (`frontend/src/`)
 
 - **`App.tsx`** — rotas (com catch-all `*` e `ErrorBoundary` na raiz). Não há provider global: cada tela carrega o que precisa.
+- **Área de Treino** — `components/WorkoutHeader` (ícones + abas "Treinos | Log", cada aba uma rota) no topo de `WorkoutHomePage` (`/treino`) e `WorkoutLogPage` (`/treino/log`). O log é paginado (`useLoadLog`) e agrupado por save e por dia local em `utils/loadLog.ts` (testado).
 - **`SplitEditorPage`** (`/treino/divisoes/:id` → `SplitEditor` com `key={id}`; `/nova` → `NewSplit`) — a tela do treino: lista de `ExerciseCard`, contador `feitos hoje` no topo, reordenar arrastando pela **alça** do card (`touch-action: none` fixo nela; pointermove/up/cancel ouvidos no `window`; só persiste se a ordem mudou e reverte se falhar — `utils/reorder.ts`), seletor do catálogo (`fetchExercises` só quando aberto e em cache depois, senão a tela puxaria as imagens do acervo todo) e edição de nome/dias em `Modal`. Toda divisão vinda do servidor passa por `applyServerSplit` (`utils/splitMerge.ts`) para não desfazer checks em voo; ao voltar ao primeiro plano num dia novo, a divisão é recarregada.
 - **`SplitEditorPage/ExerciseCard.tsx`** — o card: carga total (pilha + adicional), séries e reps em tiles **editáveis inline** (toque → input, salva no blur; um save por vez) e o check do dia com toggle otimista. Salvar manda só o que mudou (`planPatch`): `updateExercise` (carga, no catálogo) e/ou `updateExercisePlan` (séries/reps); se a carga gravou e o plano falhou, recarrega a divisão. O estado do formulário é semeado por props e a **key do card inclui os valores do plano**, para o card ser remontado quando o servidor devolve a divisão salva — é o que evita `setState` em effect.
 - **`utils/planForm.ts`** — parse/validação dos campos de plano (séries, reps mín/máx, carga, adicional) em cima de `numberMask`, **testado**, compartilhado pelo card e pela `WorkoutExerciseDetailPage`. Valor inválido devolve mensagem: descartar em silêncio deixava o campo com texto errado. O campo de carga tem 1 casa e o banco 2, então `loadChanged` compara na precisão do campo.
@@ -64,7 +66,7 @@ Padrão em camadas por domínio: `types/` → `models/` (pg puro, mapper snake�
 
 ### Schema do banco (principais)
 
-`profile` (linha única) · `settings` (linha única) · `body_measurements` · `goals` (índice único parcial p/ ativa) · `progress_photos` · `exercises` (catálogo próprio; `working_weight_kg` + `additional_weight_kg`, `video_url`, `notes`=execução) · `workout_splits` + `split_exercises` + `planned_sets` (só posição e reps alvo) · `exercise_checks` (`UNIQUE (split_id, exercise_id, checked_on)`).
+`profile` (linha única) · `settings` (linha única) · `body_measurements` · `goals` (índice único parcial p/ ativa) · `progress_photos` · `exercises` (catálogo próprio; `working_weight_kg` + `additional_weight_kg`, `video_url`, `notes`=execução) · `workout_splits` + `split_exercises` + `planned_sets` (só posição e reps alvo) · `exercise_checks` (`UNIQUE (split_id, exercise_id, checked_on)`) · `exercise_load_logs` (log de carga; `exercise_id` ON DELETE SET NULL + `exercise_name` copiado, para o log sobreviver à exclusão).
 
 A carga vive **só** no catálogo, em duas parcelas: `working_weight_kg` (pilha do aparelho) e `additional_weight_kg` (peso extra da rodinha/anilha). A **carga levantada é a soma** — `totalLoadKg()` existe nos dois lados e é o número grande do card. `null` nas duas parcelas significa "sem carga registrada" e é diferente de `0`.
 

@@ -1,4 +1,7 @@
+import type { PoolClient } from "pg";
 import { pool, rollback } from "../database/connection.js";
+import { loadChanges } from "../lib/loadLog.js";
+import * as loadLogModel from "./loadLogModel.js";
 import { buildUpdateSet } from "../lib/sqlUpdate.js";
 import { isUniqueViolation } from "../lib/pgError.js";
 import { DuplicateExerciseError } from "./errors.js";
@@ -55,32 +58,64 @@ export async function findById(id: string): Promise<Exercise | null> {
   return result.rows[0] ? toExercise(result.rows[0]) : null;
 }
 
-export async function create(entry: NewExercise): Promise<Exercise> {
+/**
+ * Transação com tradução do nome duplicado: create e update de carga gravam o log junto,
+ * e um erro no meio não pode deixar exercício sem log nem log sem exercício.
+ */
+async function inTransaction<T>(work: (client: PoolClient) => Promise<T>): Promise<T> {
+  const client = await pool.connect();
   try {
-    const result = await pool.query<ExerciseRow>(
-      `INSERT INTO exercises (name, muscle_group, equipment, image_url, machine_setting, notes, video_url, image_focal_x, image_focal_y, image_zoom, working_weight_kg, additional_weight_kg)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-       RETURNING *`,
-      [
-        entry.name,
-        entry.muscleGroup,
-        entry.equipment ?? null,
-        entry.imageUrl ?? null,
-        entry.machineSetting ?? null,
-        entry.notes ?? null,
-        entry.videoUrl ?? null,
-        entry.imageFocalX ?? 50,
-        entry.imageFocalY ?? 50,
-        entry.imageZoom ?? 1,
-        entry.workingWeightKg ?? null,
-        entry.additionalWeightKg ?? null,
-      ]
-    );
-    return toExercise(result.rows[0]!);
+    await client.query("BEGIN");
+    const result = await work(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    await rollback(client);
+    if (isUniqueViolation(error)) throw new DuplicateExerciseError();
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function create(entry: NewExercise): Promise<Exercise> {
+  const changes = loadChanges(null, entry);
+  if (changes.length > 0) {
+    return inTransaction(async (client) => {
+      const exercise = await insertExercise(client, entry);
+      await loadLogModel.record(client, exercise, changes);
+      return exercise;
+    });
+  }
+  try {
+    return await insertExercise(pool, entry);
   } catch (error) {
     if (isUniqueViolation(error)) throw new DuplicateExerciseError();
     throw error;
   }
+}
+
+async function insertExercise(db: Pick<PoolClient, "query">, entry: NewExercise): Promise<Exercise> {
+  const result = await db.query<ExerciseRow>(
+    `INSERT INTO exercises (name, muscle_group, equipment, image_url, machine_setting, notes, video_url, image_focal_x, image_focal_y, image_zoom, working_weight_kg, additional_weight_kg)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+     RETURNING *`,
+    [
+      entry.name,
+      entry.muscleGroup,
+      entry.equipment ?? null,
+      entry.imageUrl ?? null,
+      entry.machineSetting ?? null,
+      entry.notes ?? null,
+      entry.videoUrl ?? null,
+      entry.imageFocalX ?? 50,
+      entry.imageFocalY ?? 50,
+      entry.imageZoom ?? 1,
+      entry.workingWeightKg ?? null,
+      entry.additionalWeightKg ?? null,
+    ]
+  );
+  return toExercise(result.rows[0]!);
 }
 
 const COLUMN_MAP: Record<keyof ExercisePatch, string> = {
@@ -104,16 +139,32 @@ export async function update(id: string, patch: ExercisePatch): Promise<Exercise
 
   sets.push("updated_at = NOW()");
   values.push(id);
-  try {
-    const result = await pool.query<ExerciseRow>(
-      `UPDATE exercises SET ${sets.join(", ")} WHERE id = $${nextIndex} RETURNING *`,
-      values
-    );
-    return result.rows[0] ? toExercise(result.rows[0]) : null;
-  } catch (error) {
-    if (isUniqueViolation(error)) throw new DuplicateExerciseError();
-    throw error;
+  const sql = `UPDATE exercises SET ${sets.join(", ")} WHERE id = $${nextIndex} RETURNING *`;
+
+  const touchesLoad = patch.workingWeightKg !== undefined || patch.additionalWeightKg !== undefined;
+  if (!touchesLoad) {
+    try {
+      const result = await pool.query<ExerciseRow>(sql, values);
+      return result.rows[0] ? toExercise(result.rows[0]) : null;
+    } catch (error) {
+      if (isUniqueViolation(error)) throw new DuplicateExerciseError();
+      throw error;
+    }
   }
+
+  // A carga só muda por aqui, e cada mudança vai para o log do treino na mesma transação.
+  // O FOR UPDATE garante que o valor "antes" é o que o UPDATE de fato substituiu.
+  return inTransaction(async (client) => {
+    const current = await client.query<Pick<ExerciseRow, "working_weight_kg" | "additional_weight_kg">>(
+      "SELECT working_weight_kg, additional_weight_kg FROM exercises WHERE id = $1 FOR UPDATE",
+      [id]
+    );
+    if (!current.rows[0]) return null;
+    const result = await client.query<ExerciseRow>(sql, values);
+    const exercise = toExercise(result.rows[0]!);
+    await loadLogModel.record(client, exercise, loadChanges(current.rows[0], patch));
+    return exercise;
+  });
 }
 
 export interface ImageSwap {

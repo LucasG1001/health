@@ -38,6 +38,7 @@ Browser → Caddy (proxy central, TLS) → Express (server :3333, serve SPA + AP
 | `GET/POST` | `/api/sessions` (+ `/active`, `/:id/finish`) | sessões de treino |
 | `PUT/DELETE` | `/api/session-sets/:id` · `/api/session-exercises/:id` | séries e exercícios da sessão |
 | `GET` | `/api/stats/{body,volume}` | gráficos |
+| `GET` | `/api/load-log?limit&before` | log de mudanças de carga/adicional (aba Log do Treino) |
 
 ## Rodando local
 

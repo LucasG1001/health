@@ -18,6 +18,7 @@ import { photoRoutes } from "./routes/photoRoutes.js";
 import { exerciseRoutes } from "./routes/exerciseRoutes.js";
 import { splitRoutes } from "./routes/splitRoutes.js";
 import { statsRoutes } from "./routes/statsRoutes.js";
+import { loadLogRoutes } from "./routes/loadLogRoutes.js";
 import { notFoundHandler, errorHandler } from "./middleware/errorHandler.js";
 import { uploadErrorHandler } from "./middleware/uploadErrorHandler.js";
 
@@ -42,6 +43,7 @@ app.use("/api/photos", photoRoutes);
 app.use("/api/exercises", exerciseRoutes);
 app.use("/api/splits", splitRoutes);
 app.use("/api/stats", statsRoutes);
+app.use("/api/load-log", loadLogRoutes);
 
 app.use("/uploads", express.static(UPLOAD_DIR, { maxAge: "365d", immutable: true }));
 
