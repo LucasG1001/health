@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loadChanged, parsePlanForm, planFormOf } from "./planForm";
+import { loadChanged, parsePlanForm, planFormOf, planPatch } from "./planForm";
 import type { SplitExercise } from "../types/split";
 
 function exercise(overrides: Partial<SplitExercise> = {}): SplitExercise {
@@ -105,5 +105,50 @@ describe("loadChanged", () => {
   it("é verdadeiro ao limpar a carga", () => {
     const result = parsePlanForm({ ...raw, weight: "" });
     expect(result.ok && loadChanged(exercise(), result.values)).toBe(true);
+  });
+
+  it("não acusa mudança numa carga salva com 2 casas que o campo mostra arredondada", () => {
+    const ex = exercise({ workingWeightKg: 2.25, additionalWeightKg: null });
+    const result = parsePlanForm({ ...planFormOf(ex) });
+    expect(result.ok && loadChanged(ex, result.values)).toBe(false);
+  });
+});
+
+describe("planPatch", () => {
+  function patchFor(ex: SplitExercise, overrides: Partial<typeof raw>) {
+    const result = parsePlanForm({ ...planFormOf(ex), ...overrides });
+    if (!result.ok) throw new Error(result.error);
+    return planPatch(ex, result.values);
+  }
+
+  it("é null quando nada mudou (tocar no campo e sair não salva)", () => {
+    expect(patchFor(exercise(), {})).toBeNull();
+  });
+
+  it("muda só os alvos sem mandar `series`", () => {
+    expect(patchFor(exercise(), { repsMin: "10" })).toEqual({
+      load: null,
+      plan: { targetRepsMin: 10, targetRepsMax: 12 },
+    });
+  });
+
+  it("manda `series` quando a quantidade mudou", () => {
+    expect(patchFor(exercise(), { series: "4" })?.plan).toEqual({
+      series: 4,
+      targetRepsMin: 8,
+      targetRepsMax: 12,
+    });
+  });
+
+  it("muda só a carga sem tocar no plano", () => {
+    expect(patchFor(exercise(), { weight: "42,5" })).toEqual({
+      load: { workingWeightKg: 42.5, additionalWeightKg: 5 },
+      plan: null,
+    });
+  });
+
+  it("cria as séries de um exercício que não tinha nenhuma", () => {
+    const ex = exercise({ plannedSets: [] });
+    expect(patchFor(ex, {})?.plan).toEqual({ series: 3, targetRepsMin: 12, targetRepsMax: null });
   });
 });

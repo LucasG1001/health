@@ -74,16 +74,13 @@ export const updateExercisePlan = asyncHandler("Erro ao atualizar o exercício."
     respondValidationError(res, parsed.error);
     return;
   }
-  const split = await splitModel.updateExercisePlan(
-    String(req.params.id),
-    String(req.params.splitExerciseId),
-    parsed.data
+  res.json(
+    await splitModel.updateExercisePlan(
+      String(req.params.id),
+      String(req.params.splitExerciseId),
+      parsed.data
+    )
   );
-  if (!split) {
-    res.status(404).json({ error: "Exercício não encontrado nesta divisão." });
-    return;
-  }
-  res.json(split);
 });
 
 export const remove = asyncHandler("Erro ao remover a divisão.", async (req, res) => {

@@ -6,8 +6,9 @@ import * as profileModel from "../models/profileModel.js";
 import * as measurementModel from "../models/measurementModel.js";
 import type { ActivityLevel, BiologicalSex, BloodType, Profile, ProfileRow } from "../types/profile.js";
 
-async function toProfile(row: ProfileRow | null): Promise<Profile> {
-  const latest = await measurementModel.findLatestWithWeight();
+type LatestWithWeight = Awaited<ReturnType<typeof measurementModel.findLatestWithWeight>>;
+
+function toProfile(row: ProfileRow | null, latest: LatestWithWeight): Profile {
   const weightKg = latest?.weight_kg ?? null;
   const derived = deriveBodyMetrics({
     weightKg,
@@ -37,8 +38,11 @@ async function toProfile(row: ProfileRow | null): Promise<Profile> {
 }
 
 export const get = asyncHandler("Erro ao buscar o perfil.", async (_req, res) => {
-  const row = await profileModel.get();
-  res.json(await toProfile(row));
+  const [row, latest] = await Promise.all([
+    profileModel.get(),
+    measurementModel.findLatestWithWeight(),
+  ]);
+  res.json(toProfile(row, latest));
 });
 
 export const update = asyncHandler("Erro ao salvar o perfil.", async (req, res) => {
@@ -47,6 +51,9 @@ export const update = asyncHandler("Erro ao salvar o perfil.", async (req, res) 
     respondValidationError(res, parsed.error);
     return;
   }
-  const row = await profileModel.upsert(parsed.data);
-  res.json(await toProfile(row));
+  const [row, latest] = await Promise.all([
+    profileModel.upsert(parsed.data),
+    measurementModel.findLatestWithWeight(),
+  ]);
+  res.json(toProfile(row, latest));
 });

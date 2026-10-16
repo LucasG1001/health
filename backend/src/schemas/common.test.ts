@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { httpUrl, isoDate, pastIsoDate } from "./common.js";
 
 describe("isoDate", () => {
@@ -35,6 +35,20 @@ describe("pastIsoDate", () => {
 
   it("aceita data passada", () => {
     expect(schema.safeParse("1990-01-15").success).toBe(true);
+  });
+
+  describe("no fim da noite em São Paulo", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("recusa o dia seguinte local mesmo com a data UTC já virada", () => {
+      // 22h de 15/10 em São Paulo = 01h de 16/10 em UTC.
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-10-16T01:00:00Z"));
+      expect(schema.safeParse("2026-10-15").success).toBe(true);
+      expect(schema.safeParse("2026-10-16").success).toBe(false);
+    });
   });
 });
 

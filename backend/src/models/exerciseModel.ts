@@ -1,4 +1,4 @@
-import { pool } from "../database/connection.js";
+import { pool, rollback } from "../database/connection.js";
 import { buildUpdateSet } from "../lib/sqlUpdate.js";
 import { isUniqueViolation } from "../lib/pgError.js";
 import { DuplicateExerciseError } from "./errors.js";
@@ -116,26 +116,48 @@ export async function update(id: string, patch: ExercisePatch): Promise<Exercise
   }
 }
 
-export async function setImagePath(id: string, imagePath: string): Promise<string | null> {
-  const result = await pool.query<{ old_path: string | null }>(
-    `UPDATE exercises e SET image_path = $2, updated_at = NOW()
-     FROM (SELECT id, image_path AS old_path FROM exercises WHERE id = $1) prev
-     WHERE e.id = prev.id
-     RETURNING prev.old_path`,
-    [id, imagePath]
-  );
-  return result.rows[0]?.old_path ?? null;
+export interface ImageSwap {
+  exercise: Exercise;
+  oldPath: string | null;
 }
 
-export async function clearImagePath(id: string): Promise<string | null> {
-  const result = await pool.query<{ old_path: string | null }>(
-    `UPDATE exercises e SET image_path = NULL, updated_at = NOW()
-     FROM (SELECT id, image_path AS old_path FROM exercises WHERE id = $1) prev
-     WHERE e.id = prev.id
-     RETURNING prev.old_path`,
-    [id]
-  );
-  return result.rows[0]?.old_path ?? null;
+/**
+ * Troca o image_path e devolve o anterior. O FOR UPDATE é o que garante o caminho antigo
+ * certo com dois uploads simultâneos: um subselect na mesma instrução lê o snapshot do
+ * início dela, e um dos dois arquivos ficaria órfão no disco.
+ */
+async function swapImagePath(id: string, imagePath: string | null): Promise<ImageSwap | null> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const prev = await client.query<{ image_path: string | null }>(
+      "SELECT image_path FROM exercises WHERE id = $1 FOR UPDATE",
+      [id]
+    );
+    if (!prev.rows[0]) {
+      await client.query("ROLLBACK");
+      return null;
+    }
+    const result = await client.query<ExerciseRow>(
+      "UPDATE exercises SET image_path = $2, updated_at = NOW() WHERE id = $1 RETURNING *",
+      [id, imagePath]
+    );
+    await client.query("COMMIT");
+    return { exercise: toExercise(result.rows[0]!), oldPath: prev.rows[0].image_path };
+  } catch (error) {
+    await rollback(client);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export function replaceImagePath(id: string, imagePath: string): Promise<ImageSwap | null> {
+  return swapImagePath(id, imagePath);
+}
+
+export function clearImagePath(id: string): Promise<ImageSwap | null> {
+  return swapImagePath(id, null);
 }
 
 export async function remove(id: string): Promise<{ imagePath: string | null } | null> {

@@ -28,17 +28,29 @@ const MeasuresPage = lazy(() =>
 
 const SIDEBAR_STORAGE_KEY = "sidebar-collapsed";
 
+// localStorage lança em aba anônima ou com armazenamento bloqueado; sem o try o app inteiro
+// caía no ErrorBoundary por causa de uma preferência de layout.
+function readCollapsed(): boolean {
+  try {
+    return localStorage.getItem(SIDEBAR_STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
 function Layout() {
-  const [collapsed, setCollapsed] = useState(
-    () => localStorage.getItem(SIDEBAR_STORAGE_KEY) === "true"
-  );
+  const [collapsed, setCollapsed] = useState(readCollapsed);
 
   // O localStorage.setItem ficava dentro do updater, que precisa ser puro (pode ser
   // reexecutado pelo React).
   const toggleSidebar = () => {
     const next = !collapsed;
     setCollapsed(next);
-    localStorage.setItem(SIDEBAR_STORAGE_KEY, String(next));
+    try {
+      localStorage.setItem(SIDEBAR_STORAGE_KEY, String(next));
+    } catch {
+      return;
+    }
   };
 
   return (

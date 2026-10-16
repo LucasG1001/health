@@ -8,6 +8,13 @@ export class DomainError extends Error {
   }
 }
 
+export class NotFoundError extends DomainError {
+  constructor(message: string) {
+    super(message, 404);
+    this.name = "NotFoundError";
+  }
+}
+
 export class DuplicateMeasurementError extends DomainError {
   constructor() {
     super("Já existe uma medição nesta data.", 409);

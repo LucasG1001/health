@@ -186,10 +186,6 @@ export async function migrate(): Promise<void> {
     );
   `);
 
-  await pool.query(`
-    CREATE INDEX IF NOT EXISTS exercise_checks_date_idx ON exercise_checks (checked_on);
-  `);
-
   // Sobras de features removidas (ExerciseDB, PRs, gamificação, execução cronometrada de
   // sessão) e de séries planejadas que nunca chegaram a ser gravadas. Nada abaixo tem
   // leitor no código.
@@ -235,4 +231,12 @@ export async function migrate(): Promise<void> {
       DROP COLUMN IF EXISTS wake_lock_enabled,
       DROP COLUMN IF EXISTS rest_working_seconds;
   `);
+
+  // Nenhuma leitura filtra só por checked_on: o EXISTS do splitModel e o DELETE do
+  // checkModel usam o índice do UNIQUE (split_id, exercise_id, checked_on).
+  await pool.query(`DROP INDEX IF EXISTS exercise_checks_date_idx;`);
+
+  // Linhas únicas criadas uma vez aqui, e não a cada leitura nos models.
+  await pool.query(`INSERT INTO profile (singleton) VALUES (TRUE) ON CONFLICT (singleton) DO NOTHING;`);
+  await pool.query(`INSERT INTO settings (singleton) VALUES (TRUE) ON CONFLICT (singleton) DO NOTHING;`);
 }

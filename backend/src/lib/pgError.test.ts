@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { isUniqueViolation, toDomainError } from "./pgError.js";
 
-function pgError(code: string): Error {
-  return Object.assign(new Error("erro do postgres"), { code });
+function pgError(code: string, constraint?: string): Error {
+  return Object.assign(new Error("erro do postgres"), { code, constraint });
 }
 
 describe("isUniqueViolation", () => {
@@ -24,7 +24,22 @@ describe("toDomainError", () => {
     expect(toDomainError(pgError("22008"))?.status).toBe(400);
     expect(toDomainError(pgError("23514"))?.status).toBe(400);
     expect(toDomainError(pgError("23502"))?.status).toBe(400);
-    expect(toDomainError(pgError("23503"))?.status).toBe(409);
+    expect(toDomainError(pgError("23503"))?.status).toBe(400);
+  });
+
+  it("FK de exercício inexistente vira mensagem específica", () => {
+    const error = toDomainError(pgError("23503", "split_exercises_exercise_id_fkey"));
+    expect(error?.status).toBe(400);
+    expect(error?.message).toBe("Exercício não encontrado.");
+  });
+
+  it("CHECK de meta sem alvo vira mensagem específica", () => {
+    const error = toDomainError(pgError("23514", "goals_check"));
+    expect(error?.message).toBe("Defina um peso alvo e/ou um % de gordura alvo.");
+  });
+
+  it("22P02 não presume que o valor era um identificador", () => {
+    expect(toDomainError(pgError("22P02"))?.message).toBe("Valor em formato inválido.");
   });
 
   it("devolve mensagem em português", () => {

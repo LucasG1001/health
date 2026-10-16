@@ -70,6 +70,34 @@
   border-color: var(--color-accent);
 }
 
+/* O botão estica pelo card inteiro (::after): o toque vale em qualquer ponto e o card é
+   alcançável pelo teclado. */
+.statCard {
+  position: relative;
+}
+
+.statButton {
+  display: flex;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.statButton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-lg);
+}
+
+.statButton:focus-visible {
+  outline: none;
+}
+
+.statButton:focus-visible::after {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
 .statValue {
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-bold);

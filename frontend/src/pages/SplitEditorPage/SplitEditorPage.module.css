@@ -113,10 +113,6 @@
   gap: var(--spacing-md);
 }
 
-.exerciseList.listDragging {
-  touch-action: none;
-}
-
 .info {
   display: flex;
   flex-direction: column;

@@ -274,6 +274,19 @@ export function ListIcon({ className }: IconProps) {
   );
 }
 
+export function GripIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <path d="M9 6h.01" />
+      <path d="M15 6h.01" />
+      <path d="M9 12h.01" />
+      <path d="M15 12h.01" />
+      <path d="M9 18h.01" />
+      <path d="M15 18h.01" />
+    </Icon>
+  );
+}
+
 export function ArrowUpIcon({ className }: IconProps) {
   return (
     <Icon className={className}>

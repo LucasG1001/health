@@ -26,12 +26,18 @@ export function PhotoUploadModal() {
   const close = () => navigate("/medidas/fotos");
 
   const previewRef = useRef<string | null>(null);
+  const pickSeq = useRef(0);
 
   const handleFile = async (selected: File | null) => {
-    const reduced = selected ? await compressImage(selected) : null;
+    // Cancelar o seletor dispara change com a lista vazia: não pode apagar a foto já escolhida.
+    if (!selected) return;
+    // Duas escolhas seguidas: a compressão da primeira pode terminar por último e vencer.
+    const seq = ++pickSeq.current;
+    const reduced = await compressImage(selected);
+    if (seq !== pickSeq.current) return;
     setFile(reduced);
     if (previewRef.current) URL.revokeObjectURL(previewRef.current);
-    const next = reduced ? URL.createObjectURL(reduced) : null;
+    const next = URL.createObjectURL(reduced);
     previewRef.current = next;
     setPreview(next);
   };

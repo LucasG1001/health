@@ -53,14 +53,6 @@ export function relativeUploadPath(subdir: UploadSubdir, filename: string): stri
   return `${subdir}/${filename}`;
 }
 
-const EXT_BY_CONTENT_TYPE: Record<string, string> = {
-  "image/jpeg": ".jpg",
-  "image/png": ".png",
-  "image/webp": ".webp",
-  "image/gif": ".gif",
-};
-
-
 export async function removeUploadedFile(filePath: string | null): Promise<void> {
   if (!filePath) return;
   try {

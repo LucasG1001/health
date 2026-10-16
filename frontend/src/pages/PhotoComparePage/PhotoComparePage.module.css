@@ -141,7 +141,7 @@
   top: var(--spacing-sm);
   padding: 4px 10px;
   border-radius: var(--radius-full);
-  background: rgba(0, 0, 0, 0.55);
+  background: var(--color-bg-overlay);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
   color: var(--color-on-accent);

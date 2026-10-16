@@ -36,7 +36,7 @@
   transform: translateX(-50%);
   padding: 4px 10px;
   border-radius: var(--radius-full);
-  background: rgba(0, 0, 0, 0.55);
+  background: var(--color-bg-overlay);
   color: var(--color-on-accent);
   font-size: var(--font-size-xs);
   pointer-events: none;

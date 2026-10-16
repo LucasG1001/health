@@ -2,6 +2,7 @@ import { pool, rollback } from "../database/connection.js";
 import { buildUpdateSet } from "../lib/sqlUpdate.js";
 import { APP_TIMEZONE } from "../lib/dateUtils.js";
 import { resolveImageUrl } from "./exerciseModel.js";
+import { NotFoundError } from "./errors.js";
 import type {
   PlannedSetRow,
   Split,
@@ -24,6 +25,17 @@ function toSplit(row: SplitRow, exercises: SplitExercise[]): Split {
   };
 }
 
+function groupBy<T>(rows: T[], key: (row: T) => string): Map<string, T[]> {
+  const groups = new Map<string, T[]>();
+  for (const row of rows) {
+    const k = key(row);
+    const group = groups.get(k);
+    if (group) group.push(row);
+    else groups.set(k, [row]);
+  }
+  return groups;
+}
+
 function toSplitExercise(row: SplitExerciseRow, plannedSetRows: PlannedSetRow[]): SplitExercise {
   return {
     id: row.id,
@@ -43,9 +55,7 @@ function toSplitExercise(row: SplitExerciseRow, plannedSetRows: PlannedSetRow[])
     videoUrl: row.video_url,
     instructions: row.exercise_notes,
     notes: row.notes,
-    plannedSets: plannedSetRows
-      .filter((set) => set.split_exercise_id === row.id)
-      .map((set) => ({
+    plannedSets: plannedSetRows.map((set) => ({
         id: set.id,
         position: set.position,
         targetRepsMin: set.target_reps_min,
@@ -73,43 +83,52 @@ const EXERCISES_SQL = `
     JOIN exercises e ON e.id = se.exercise_id
 `;
 
+function assemble(
+  splitRows: SplitRow[],
+  exerciseRows: SplitExerciseRow[],
+  plannedSetRows: PlannedSetRow[]
+): Split[] {
+  const setsByExercise = groupBy(plannedSetRows, (set) => set.split_exercise_id);
+  const exercisesBySplit = groupBy(exerciseRows, (row) => row.split_id);
+  return splitRows.map((split) =>
+    toSplit(
+      split,
+      (exercisesBySplit.get(split.id) ?? []).map((row) =>
+        toSplitExercise(row, setsByExercise.get(row.id) ?? [])
+      )
+    )
+  );
+}
+
 export async function findAll(): Promise<Split[]> {
   const [splits, exercises, plannedSets] = await Promise.all([
     pool.query<SplitRow>("SELECT * FROM workout_splits ORDER BY position ASC, created_at ASC"),
     pool.query<SplitExerciseRow>(`${EXERCISES_SQL} ORDER BY se.position ASC`, [APP_TIMEZONE]),
     pool.query<PlannedSetRow>("SELECT * FROM planned_sets ORDER BY position ASC"),
   ]);
+  return assemble(splits.rows, exercises.rows, plannedSets.rows);
+}
 
-  return splits.rows.map((split) =>
-    toSplit(
-      split,
-      exercises.rows
-        .filter((row) => row.split_id === split.id)
-        .map((row) => toSplitExercise(row, plannedSets.rows))
-    )
-  );
+async function loadSplit(row: SplitRow): Promise<Split> {
+  const [exercises, plannedSets] = await Promise.all([
+    pool.query<SplitExerciseRow>(
+      `${EXERCISES_SQL} WHERE se.split_id = $2 ORDER BY se.position ASC`,
+      [APP_TIMEZONE, row.id]
+    ),
+    pool.query<PlannedSetRow>(
+      `SELECT ps.* FROM planned_sets ps
+         JOIN split_exercises se ON se.id = ps.split_exercise_id
+        WHERE se.split_id = $1
+        ORDER BY ps.position ASC`,
+      [row.id]
+    ),
+  ]);
+  return assemble([row], exercises.rows, plannedSets.rows)[0]!;
 }
 
 export async function findById(id: string): Promise<Split | null> {
   const split = await pool.query<SplitRow>("SELECT * FROM workout_splits WHERE id = $1", [id]);
-  if (!split.rows[0]) return null;
-
-  const exercises = await pool.query<SplitExerciseRow>(
-    `${EXERCISES_SQL} WHERE se.split_id = $2 ORDER BY se.position ASC`,
-    [APP_TIMEZONE, id]
-  );
-  const plannedSets = await pool.query<PlannedSetRow>(
-    `SELECT ps.* FROM planned_sets ps
-       JOIN split_exercises se ON se.id = ps.split_exercise_id
-      WHERE se.split_id = $1
-      ORDER BY ps.position ASC`,
-    [id]
-  );
-
-  return toSplit(
-    split.rows[0],
-    exercises.rows.map((row) => toSplitExercise(row, plannedSets.rows))
-  );
+  return split.rows[0] ? loadSplit(split.rows[0]) : null;
 }
 
 export async function create(entry: { name: string; weekdays: number[] }): Promise<Split> {
@@ -137,22 +156,24 @@ export async function update(
   sets.push("updated_at = NOW()");
   values.push(id);
   const result = await pool.query<SplitRow>(
-    `UPDATE workout_splits SET ${sets.join(", ")} WHERE id = $${nextIndex} RETURNING id`,
+    `UPDATE workout_splits SET ${sets.join(", ")} WHERE id = $${nextIndex} RETURNING *`,
     values
   );
-  if (!result.rows[0]) return null;
-  return findById(id);
+  return result.rows[0] ? loadSplit(result.rows[0]) : null;
 }
 
 export async function reorder(orderedIds: string[]): Promise<Split[]> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    for (let i = 0; i < orderedIds.length; i++) {
-      await client.query("UPDATE workout_splits SET position = $1, updated_at = NOW() WHERE id = $2", [
-        i,
-        orderedIds[i],
-      ]);
+    const result = await client.query(
+      `UPDATE workout_splits s SET position = o.pos - 1, updated_at = NOW()
+         FROM unnest($1::uuid[]) WITH ORDINALITY AS o(id, pos)
+        WHERE s.id = o.id`,
+      [orderedIds]
+    );
+    if ((result.rowCount ?? 0) !== orderedIds.length) {
+      throw new NotFoundError("Divisão não encontrada.");
     }
     await client.query("COMMIT");
   } catch (error) {
@@ -240,16 +261,19 @@ export async function updateExercisePlan(
   splitId: string,
   splitExerciseId: string,
   input: UpdateExercisePlanInput
-): Promise<Split | null> {
-  const existing = await pool.query<{ id: string }>(
-    "SELECT id FROM split_exercises WHERE id = $1 AND split_id = $2",
-    [splitExerciseId, splitId]
-  );
-  if (!existing.rows[0]) return null;
-
+): Promise<Split> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    // Dentro da transação e com lock: checado antes, um replaceExercises (reordenar)
+    // concorrente recriava a linha no meio e o UPDATE abaixo não afetava nada, mas a
+    // rota respondia 200 e a edição se perdia.
+    const existing = await client.query(
+      "SELECT 1 FROM split_exercises WHERE id = $1 AND split_id = $2 FOR UPDATE",
+      [splitExerciseId, splitId]
+    );
+    if (!existing.rows[0]) throw new NotFoundError("Exercício não encontrado nesta divisão.");
+
     if (input.series === undefined) {
       // Só os alvos: preserva as linhas (e os ids) das séries planejadas.
       await client.query(
@@ -274,6 +298,8 @@ export async function updateExercisePlan(
     client.release();
   }
 
-  return findById(splitId);
+  const split = await findById(splitId);
+  if (!split) throw new NotFoundError("Divisão não encontrada.");
+  return split;
 }
 

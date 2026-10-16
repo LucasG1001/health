@@ -16,8 +16,11 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
   const status = statusOf(err);
   console.error("Erro não tratado:", err);
   if (res.headersSent) return;
-  // JSON malformado chega aqui com status 400 do body-parser; ignorá-lo virava 500.
-  res
-    .status(status)
-    .json({ error: status === 400 ? "Corpo da requisição inválido." : "Erro interno do servidor." });
+  // JSON malformado (400) e corpo acima do limite (413) chegam aqui do body-parser.
+  res.status(status).json({ error: MESSAGE_BY_STATUS[status] ?? "Erro interno do servidor." });
 }
+
+const MESSAGE_BY_STATUS: Record<number, string> = {
+  400: "Corpo da requisição inválido.",
+  413: "Corpo da requisição grande demais.",
+};

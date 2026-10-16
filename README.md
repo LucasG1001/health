@@ -41,9 +41,14 @@ Browser → Caddy (proxy central, TLS) → Express (server :3333, serve SPA + AP
 
 ## Rodando local
 
-Pré-requisito: PostgreSQL com banco `health` (as tabelas são criadas no boot).
+Pré-requisito: Docker, para o Postgres de desenvolvimento (`docker-compose.dev.yml`). Ele
+expõe a porta **5433** (a 5432 costuma estar ocupada por um Postgres nativo) e cria os
+bancos `health` e `health_test`. As tabelas são criadas no boot do backend.
 
 ```bash
+# banco (uma vez; o container reinicia sozinho)
+cd backend && npm run db:up        # = docker compose -f ../docker-compose.dev.yml up -d
+
 # backend (hot-reload)
 cd backend && cp .env.example .env && npm install && npm run dev   # http://localhost:3333
 
@@ -54,7 +59,7 @@ cd frontend && npm install && npm run dev                          # http://loca
 Testes e verificação:
 
 ```bash
-cd backend && npm test && npm run build
+cd backend && npm test && npm run test:integration && npm run build   # integração usa health_test
 cd frontend && npm test && npm run build && npm run lint
 ```
 

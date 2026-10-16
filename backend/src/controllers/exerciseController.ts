@@ -62,29 +62,30 @@ export const uploadImage = asyncHandler("Erro ao enviar a imagem.", async (req, 
     return;
   }
 
-  const id = String(req.params.id);
   const filePath = relativeUploadPath("exercises", file.filename);
-  const exists = await exerciseModel.findById(id);
-  if (!exists) {
+  let swap: exerciseModel.ImageSwap | null;
+  try {
+    swap = await exerciseModel.replaceImagePath(String(req.params.id), filePath);
+  } catch (error) {
+    // O multer já gravou o arquivo; sem isto ele fica órfão a cada falha do banco.
+    await removeUploadedFile(filePath);
+    throw error;
+  }
+  if (!swap) {
     await removeUploadedFile(filePath);
     res.status(404).json({ error: "Exercício não encontrado." });
     return;
   }
-
-  const oldPath = await exerciseModel.setImagePath(id, filePath);
-  await removeUploadedFile(oldPath);
-  const exercise = await exerciseModel.findById(id);
-  res.json(exercise);
+  await removeUploadedFile(swap.oldPath);
+  res.json(swap.exercise);
 });
 
 export const removeImage = asyncHandler("Erro ao remover a imagem.", async (req, res) => {
-  const id = String(req.params.id);
-  const exists = await exerciseModel.findById(id);
-  if (!exists) {
+  const swap = await exerciseModel.clearImagePath(String(req.params.id));
+  if (!swap) {
     res.status(404).json({ error: "Exercício não encontrado." });
     return;
   }
-  const oldPath = await exerciseModel.clearImagePath(id);
-  await removeUploadedFile(oldPath);
-  res.json(await exerciseModel.findById(id));
+  await removeUploadedFile(swap.oldPath);
+  res.json(swap.exercise);
 });

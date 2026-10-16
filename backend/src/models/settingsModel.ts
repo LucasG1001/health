@@ -11,12 +11,8 @@ function toSettings(row: SettingsRow): Settings {
   };
 }
 
-async function ensureRow(): Promise<void> {
-  await pool.query("INSERT INTO settings (singleton) VALUES (TRUE) ON CONFLICT (singleton) DO NOTHING");
-}
-
+// A linha única é criada pelo migrate().
 export async function get(): Promise<Settings> {
-  await ensureRow();
   const result = await pool.query<SettingsRow>("SELECT * FROM settings LIMIT 1");
   return toSettings(result.rows[0]!);
 }
@@ -28,8 +24,6 @@ const COLUMN_MAP: Record<keyof SettingsPatch, string> = {
 };
 
 export async function update(patch: SettingsPatch): Promise<Settings> {
-  await ensureRow();
-
   const { sets, values } = buildUpdateSet(patch, COLUMN_MAP);
   if (sets.length === 0) return get();
 

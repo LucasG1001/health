@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { DATE_RE } from "../lib/validation.js";
+import { todayLocalIso } from "../lib/dateUtils.js";
 
 function isRealDate(value: string): boolean {
   const [year, month, day] = value.split("-").map(Number) as [number, number, number];
@@ -18,9 +19,7 @@ export function isoDate(message: string) {
 }
 
 export function pastIsoDate(message: string) {
-  return isoDate(message).refine((value) => value <= new Date().toISOString().slice(0, 10), {
-    message,
-  });
+  return isoDate(message).refine((value) => value <= todayLocalIso(), { message });
 }
 
 /** URL http(s). z.url() sozinho aceita javascript: e data:, que vão para href/src. */

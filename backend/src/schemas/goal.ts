@@ -17,13 +17,14 @@ export const createGoalSchema = z
   .object(goalTargets)
   .refine(hasTarget.check, { message: hasTarget.message });
 
-// Sem este refine, zerar os dois alvos no PUT violava o CHECK da tabela e virava 500.
+// Só o corpo que zera os dois alvos é recusável aqui: um campo ausente mantém o valor do
+// banco. O caso "zera um, o outro já era nulo" fica com o CHECK da tabela (pgError).
 export const updateGoalSchema = z
   .object({
     ...goalTargets,
     status: z.enum(["active", "achieved", "abandoned"]).optional(),
   })
-  .refine((goal) => goal.status !== undefined || hasTarget.check(goal), {
+  .refine((goal) => !(goal.targetWeightKg === null && goal.targetBodyFatPct === null), {
     message: hasTarget.message,
   });
 

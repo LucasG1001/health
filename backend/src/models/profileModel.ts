@@ -19,9 +19,8 @@ const COLUMN_MAP: Record<keyof ProfilePatch, string> = {
   injuries: "injuries",
 };
 
+// A linha única é criada pelo migrate().
 export async function upsert(patch: ProfilePatch): Promise<ProfileRow> {
-  await pool.query("INSERT INTO profile (singleton) VALUES (TRUE) ON CONFLICT (singleton) DO NOTHING");
-
   const { sets, values } = buildUpdateSet(patch, COLUMN_MAP);
   if (sets.length === 0) {
     const current = await get();

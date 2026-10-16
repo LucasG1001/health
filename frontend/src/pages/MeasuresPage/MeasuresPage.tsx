@@ -45,7 +45,8 @@ const METRIC_OPTIONS: { key: Metric; label: string; unit: string }[] = [
 
 export function MeasuresPage() {
   const navigate = useNavigate();
-  const { measurements, latest, previous, loading, error, reload, remove } = useMeasurements();
+  const { measurements, latest, previous, latestBodyFat, loading, error, reload, remove } =
+    useMeasurements();
   const { activeGoal, reload: reloadGoals } = useGoals();
   const { profile } = useProfile();
   const { settings } = useSettings();
@@ -167,7 +168,7 @@ export function MeasuresPage() {
               value={formatNumber(latest?.bmi, 1)}
               hint={bmiLabel(latest?.bmi)}
             />
-            <StatCard label="% Gordura" value={formatPct(latest?.bodyFatPct)} />
+            <StatCard label="% Gordura" value={formatPct(latestBodyFat?.bodyFatPct)} />
             <StatCard
               label="TMB / Gasto"
               value={formatKcal(latest?.bmr ?? profile?.bmr)}

@@ -35,7 +35,9 @@ export function MeasurementHistoryPage() {
                 <button
                   type="button"
                   className={styles.actionButton}
-                  onClick={() => navigate(`/medidas/m/${measurement.id}`)}
+                  onClick={() =>
+                    navigate(`/medidas/m/${measurement.id}`, { state: { returnTo: "/medidas/historico" } })
+                  }
                   aria-label="Editar"
                 >
                   <PencilIcon className={styles.actionIcon} />

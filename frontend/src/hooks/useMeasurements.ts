@@ -1,5 +1,6 @@
 import { deleteMeasurement, fetchMeasurements } from "../services/measurementService";
 import { useResource } from "./useResource";
+import { lastWith } from "../utils/measurements";
 import type { Measurement } from "../types/measurement";
 
 export function useMeasurements() {
@@ -10,8 +11,9 @@ export function useMeasurements() {
     "Não foi possível excluir a medição."
   );
 
-  const latest = measurements.length > 0 ? measurements[measurements.length - 1] : null;
-  const previous = measurements.length > 1 ? measurements[measurements.length - 2] : null;
+  // Peso, IMC, TMB e TDEE saem da última pesagem, não da última medição qualquer.
+  const [latest = null, previous = null] = lastWith(measurements, "weightKg", 2);
+  const [latestBodyFat = null] = lastWith(measurements, "bodyFatPct");
 
-  return { measurements, latest, previous, loading, error, reload, remove };
+  return { measurements, latest, previous, latestBodyFat, loading, error, reload, remove };
 }

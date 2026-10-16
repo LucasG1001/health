@@ -7,7 +7,7 @@ import { updateExercisePlan, fetchSplit } from "../../services/splitService";
 import { updateExercise } from "../../services/exerciseService";
 import { MUSCLE_GROUP_LABELS, formatKg, imageFocalStyle, repsTarget } from "../../utils/format";
 import { apiErrorMessage } from "../../utils/apiError";
-import { loadChanged, parsePlanForm, planFormOf, type PlanFormRaw } from "../../utils/planForm";
+import { parsePlanForm, planFormOf, planPatch, type PlanFormRaw } from "../../utils/planForm";
 import type { Split } from "../../types/split";
 import styles from "./WorkoutExerciseDetailPage.module.css";
 
@@ -21,6 +21,7 @@ export function WorkoutExerciseDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<EditField | null>(null);
   const [form, setForm] = useState<PlanFormRaw | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const backTo = `/treino/divisoes/${id}`;
 
@@ -47,7 +48,10 @@ export function WorkoutExerciseDetailPage() {
 
   const planned = split?.exercises.find((e) => e.id === sxId) ?? null;
 
-  const startEdit = (field: EditField) => setEditing(field);
+  // Um save por vez: a resposta reescreve o formulário e levaria junto o campo em edição.
+  const startEdit = (field: EditField) => {
+    if (!saving) setEditing(field);
+  };
 
   const onEditKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") e.currentTarget.blur();
@@ -65,26 +69,35 @@ export function WorkoutExerciseDetailPage() {
       setForm(planFormOf(planned));
       return;
     }
-    const values = parsed.values;
-    setError(null);
-    try {
-      if (loadChanged(planned, values)) {
-        await updateExercise(planned.exerciseId, {
-          workingWeightKg: values.workingWeightKg,
-          additionalWeightKg: values.additionalWeightKg,
-        });
-      }
-      const updated = await updateExercisePlan(id, sxId, {
-        series: values.series,
-        targetRepsMin: values.targetRepsMin,
-        targetRepsMax: values.targetRepsMax,
-      });
+    const changes = planPatch(planned, parsed.values);
+    if (!changes) return;
+
+    const apply = (updated: Split) => {
       setSplit(updated);
       const fresh = updated.exercises.find((e) => e.id === sxId);
       if (fresh) setForm(planFormOf(fresh));
+    };
+
+    setError(null);
+    setSaving(true);
+    let loadSaved = false;
+    try {
+      if (changes.load) {
+        await updateExercise(planned.exerciseId, changes.load);
+        loadSaved = true;
+      }
+      apply(changes.plan ? await updateExercisePlan(id, sxId, changes.plan) : await fetchSplit(id));
     } catch (err) {
       setError(apiErrorMessage(err, "Não foi possível salvar o exercício."));
-      setForm(planFormOf(planned));
+      // A carga já foi gravada: voltar o formulário para o valor antigo faria o próximo
+      // save regravá-lo por cima. Recarregar traz o estado real do servidor.
+      if (loadSaved) {
+        await fetchSplit(id).then(apply, () => setForm(planFormOf(planned)));
+      } else {
+        setForm(planFormOf(planned));
+      }
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -113,7 +126,7 @@ export function WorkoutExerciseDetailPage() {
           )}
 
           <div className={styles.stats}>
-            <div className={`${styles.statCard} ${styles.statCardEditable}`} onClick={() => startEdit("series")}>
+            <div className={`${styles.statCard} ${styles.statCardEditable}`}>
               {editing === "series" ? (
                 <input
                   className={styles.statInput}
@@ -127,12 +140,14 @@ export function WorkoutExerciseDetailPage() {
                   aria-label="Séries"
                 />
               ) : (
-                <span className={styles.statValue}>{planned.plannedSets.length}</span>
+                <button type="button" className={styles.statButton} aria-label="Editar séries" onClick={() => startEdit("series")}>
+                  <span className={styles.statValue}>{planned.plannedSets.length}</span>
+                </button>
               )}
               <span className={styles.statLabel}>séries</span>
             </div>
 
-            <div className={`${styles.statCard} ${styles.statCardEditable}`} onClick={() => startEdit("reps")}>
+            <div className={`${styles.statCard} ${styles.statCardEditable}`}>
               {editing === "reps" ? (
                 <div
                   className={styles.repsInputs}
@@ -163,17 +178,19 @@ export function WorkoutExerciseDetailPage() {
                   />
                 </div>
               ) : (
-                <span className={styles.statValue}>
-                  {repsTarget(
-                    planned.plannedSets[0]?.targetRepsMin ?? null,
-                    planned.plannedSets[0]?.targetRepsMax ?? null
-                  )}
-                </span>
+                <button type="button" className={styles.statButton} aria-label="Editar repetições" onClick={() => startEdit("reps")}>
+                  <span className={styles.statValue}>
+                    {repsTarget(
+                      planned.plannedSets[0]?.targetRepsMin ?? null,
+                      planned.plannedSets[0]?.targetRepsMax ?? null
+                    )}
+                  </span>
+                </button>
               )}
               <span className={styles.statLabel}>reps</span>
             </div>
 
-            <div className={`${styles.statCard} ${styles.statCardEditable}`} onClick={() => startEdit("carga")}>
+            <div className={`${styles.statCard} ${styles.statCardEditable}`}>
               {editing === "carga" ? (
                 <NumericInput
                   className={`${styles.statInput} ${styles.statInputAccent}`}
@@ -186,14 +203,16 @@ export function WorkoutExerciseDetailPage() {
                   aria-label="Carga em kg"
                 />
               ) : (
-                <span className={`${styles.statValue} ${styles.statValueAccent}`}>
-                  {formatKg(planned.workingWeightKg)}
-                </span>
+                <button type="button" className={styles.statButton} aria-label="Editar carga" onClick={() => startEdit("carga")}>
+                  <span className={`${styles.statValue} ${styles.statValueAccent}`}>
+                    {formatKg(planned.workingWeightKg)}
+                  </span>
+                </button>
               )}
               <span className={styles.statLabel}>carga</span>
             </div>
 
-            <div className={`${styles.statCard} ${styles.statCardEditable}`} onClick={() => startEdit("adicional")}>
+            <div className={`${styles.statCard} ${styles.statCardEditable}`}>
               {editing === "adicional" ? (
                 <NumericInput
                   className={styles.statInput}
@@ -206,7 +225,9 @@ export function WorkoutExerciseDetailPage() {
                   aria-label="Peso adicional em kg"
                 />
               ) : (
-                <span className={styles.statValue}>{formatKg(planned.additionalWeightKg)}</span>
+                <button type="button" className={styles.statButton} aria-label="Editar peso adicional" onClick={() => startEdit("adicional")}>
+                  <span className={styles.statValue}>{formatKg(planned.additionalWeightKg)}</span>
+                </button>
               )}
               <span className={styles.statLabel}>adicional</span>
             </div>

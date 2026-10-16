@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, useOutletContext, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useOutletContext, useParams } from "react-router-dom";
 import { Modal } from "../../components/Modal/Modal";
 import { NumericInput } from "../../components/NumericInput/NumericInput";
 import { createMeasurement, updateMeasurement } from "../../services/measurementService";
@@ -35,7 +35,10 @@ export function MeasurementFormModal() {
   const navigate = useNavigate();
   const { id } = useParams();
   const { reload, measurements, loading } = useOutletContext<OutletContextValue>();
-  const close = () => navigate("/medidas");
+  const location = useLocation();
+  // Aberto pelo Histórico, fechar volta para lá (ver MeasurementHistoryPage).
+  const returnTo = (location.state as { returnTo?: string } | null)?.returnTo ?? "/medidas";
+  const close = () => navigate(returnTo);
 
   // Em reload direto de /medidas/m/:id a lista do pai ainda está vazia. Sem esperar por
   // ela o formulário abria em branco e o submit criava uma medição nova em vez de editar.

@@ -13,7 +13,10 @@ export const createSplitSchema = baseSplit;
 export const updateSplitSchema = baseSplit.partial();
 
 export const reorderSplitsSchema = z.object({
-  order: z.array(z.uuid("ID inválido.")).min(1, "Forneça ao menos uma divisão."),
+  order: z
+    .array(z.uuid("ID inválido."))
+    .min(1, "Forneça ao menos uma divisão.")
+    .refine((ids) => new Set(ids).size === ids.length, { message: "Divisão repetida na ordem." }),
 });
 
 const REPS_RANGE = {

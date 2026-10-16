@@ -1,11 +1,11 @@
 import { useState, type FocusEvent, type KeyboardEvent, type PointerEvent } from "react";
 import { NumericInput } from "../../components/NumericInput/NumericInput";
 import { ExerciseThumb } from "../../components/ExerciseThumb/ExerciseThumb";
-import { CheckIcon, ChevronRightIcon, TrashIcon } from "../../components/Icon/icons";
-import { updateExercisePlan } from "../../services/splitService";
+import { CheckIcon, ChevronRightIcon, GripIcon, TrashIcon } from "../../components/Icon/icons";
+import { fetchSplit, updateExercisePlan } from "../../services/splitService";
 import { updateExercise } from "../../services/exerciseService";
 import { MUSCLE_GROUP_LABELS, formatKg, formatNumber, repsTarget, totalLoadKg } from "../../utils/format";
-import { loadChanged, parsePlanForm, planFormOf, type PlanFormRaw } from "../../utils/planForm";
+import { parsePlanForm, planFormOf, planPatch, type PlanFormRaw } from "../../utils/planForm";
 import { apiErrorMessage } from "../../utils/apiError";
 import type { Split, SplitExercise } from "../../types/split";
 import styles from "./ExerciseCard.module.css";
@@ -16,7 +16,7 @@ interface ExerciseCardProps {
   splitId: string;
   exercise: SplitExercise;
   dragging: boolean;
-  onPointerDown: (e: PointerEvent) => void;
+  onDragStart: (e: PointerEvent<HTMLElement>) => void;
   onOpen: () => void;
   onRemove: () => void;
   onToggleCheck: (checked: boolean) => void;
@@ -28,7 +28,7 @@ export function ExerciseCard({
   splitId,
   exercise,
   dragging,
-  onPointerDown,
+  onDragStart,
   onOpen,
   onRemove,
   onToggleCheck,
@@ -43,6 +43,12 @@ export function ExerciseCard({
 
   const patch = (field: keyof PlanFormRaw, value: string) =>
     setForm((prev) => ({ ...prev, [field]: value }));
+
+  // Enquanto um save está em voo nenhum outro tile entra em edição: a resposta remonta o
+  // card e levaria junto o que estivesse sendo digitado.
+  const startEdit = (field: EditField) => {
+    if (!saving) setEditing(field);
+  };
 
   const done = exercise.checkedToday;
   const total = totalLoadKg(exercise.workingWeightKg, exercise.additionalWeightKg);
@@ -61,25 +67,30 @@ export function ExerciseCard({
       setForm(planFormOf(exercise));
       return;
     }
-    const values = parsed.values;
+    const changes = planPatch(exercise, parsed.values);
+    if (!changes) return;
+
     setSaving(true);
+    let loadSaved = false;
     try {
-      if (loadChanged(exercise, values)) {
-        await updateExercise(exercise.exerciseId, {
-          workingWeightKg: values.workingWeightKg,
-          additionalWeightKg: values.additionalWeightKg,
-        });
+      if (changes.load) {
+        await updateExercise(exercise.exerciseId, changes.load);
+        loadSaved = true;
       }
       onSaved(
-        await updateExercisePlan(splitId, exercise.id, {
-          series: values.series,
-          targetRepsMin: values.targetRepsMin,
-          targetRepsMax: values.targetRepsMax,
-        })
+        changes.plan
+          ? await updateExercisePlan(splitId, exercise.id, changes.plan)
+          : await fetchSplit(splitId)
       );
     } catch (err) {
       onError(apiErrorMessage(err, "Não foi possível salvar o exercício."));
-      setForm(planFormOf(exercise));
+      // A carga já foi gravada: voltar o formulário para o valor antigo faria o próximo
+      // save regravá-lo por cima. Recarregar traz o estado real do servidor.
+      if (loadSaved) {
+        fetchSplit(splitId).then(onSaved, () => setForm(planFormOf(exercise)));
+      } else {
+        setForm(planFormOf(exercise));
+      }
     } finally {
       setSaving(false);
     }
@@ -94,9 +105,18 @@ export function ExerciseCard({
   return (
     <article
       className={`${styles.card} ${done ? styles.cardDone : ""} ${dragging ? styles.cardDragging : ""}`}
-      onPointerDown={onPointerDown}
     >
       <div className={styles.head}>
+        <button
+          type="button"
+          className={styles.grip}
+          onPointerDown={onDragStart}
+          onContextMenu={(e) => e.preventDefault()}
+          aria-label="Arrastar para reordenar"
+        >
+          <GripIcon className={styles.gripIcon} />
+        </button>
+
         <button type="button" className={styles.body} onClick={onOpen}>
           <ExerciseThumb exercise={exercise} />
           <div className={styles.info}>
@@ -112,7 +132,6 @@ export function ExerciseCard({
         <button
           type="button"
           className={styles.remove}
-          onPointerDown={(e) => e.stopPropagation()}
           onClick={onRemove}
           aria-label="Remover exercício do treino"
         >
@@ -122,7 +141,6 @@ export function ExerciseCard({
         <button
           type="button"
           className={`${styles.check} ${done ? styles.checkDone : ""}`}
-          onPointerDown={(e) => e.stopPropagation()}
           onClick={() => onToggleCheck(!done)}
           aria-label={done ? "Desmarcar exercício de hoje" : "Marcar exercício como feito hoje"}
           aria-pressed={done}
@@ -131,12 +149,8 @@ export function ExerciseCard({
         </button>
       </div>
 
-      <div className={styles.tiles} onPointerDown={(e) => e.stopPropagation()}>
-        <div
-          className={`${styles.tile} ${styles.tileAccent}`}
-          onClick={() => setEditing("carga")}
-          role="presentation"
-        >
+      <div className={styles.tiles}>
+        <div className={`${styles.tile} ${styles.tileAccent}`}>
           {editing === "carga" ? (
             <div className={styles.pair} onBlur={onGroupBlur}>
               <NumericInput
@@ -159,7 +173,14 @@ export function ExerciseCard({
               />
             </div>
           ) : (
-            <span className={`${styles.value} ${styles.valueAccent}`}>{formatKg(total)}</span>
+            <button
+              type="button"
+              className={styles.tileButton}
+              onClick={() => startEdit("carga")}
+              aria-label="Editar carga"
+            >
+              <span className={`${styles.value} ${styles.valueAccent}`}>{formatKg(total)}</span>
+            </button>
           )}
           <span className={styles.label}>
             {hasAdditional && editing !== "carga"
@@ -168,7 +189,7 @@ export function ExerciseCard({
           </span>
         </div>
 
-        <div className={styles.tile} onClick={() => setEditing("series")} role="presentation">
+        <div className={styles.tile}>
           {editing === "series" ? (
             <input
               className={styles.input}
@@ -182,12 +203,19 @@ export function ExerciseCard({
               aria-label="Séries"
             />
           ) : (
-            <span className={styles.value}>{exercise.plannedSets.length}</span>
+            <button
+              type="button"
+              className={styles.tileButton}
+              onClick={() => startEdit("series")}
+              aria-label="Editar séries"
+            >
+              <span className={styles.value}>{exercise.plannedSets.length}</span>
+            </button>
           )}
           <span className={styles.label}>séries</span>
         </div>
 
-        <div className={styles.tile} onClick={() => setEditing("reps")} role="presentation">
+        <div className={styles.tile}>
           {editing === "reps" ? (
             <div className={styles.pair} onBlur={onGroupBlur}>
               <input
@@ -213,9 +241,16 @@ export function ExerciseCard({
               />
             </div>
           ) : (
-            <span className={styles.value}>
-              {repsTarget(first?.targetRepsMin ?? null, first?.targetRepsMax ?? null)}
-            </span>
+            <button
+              type="button"
+              className={styles.tileButton}
+              onClick={() => startEdit("reps")}
+              aria-label="Editar repetições"
+            >
+              <span className={styles.value}>
+                {repsTarget(first?.targetRepsMin ?? null, first?.targetRepsMax ?? null)}
+              </span>
+            </button>
           )}
           <span className={styles.label}>{saving ? "salvando…" : "reps"}</span>
         </div>
